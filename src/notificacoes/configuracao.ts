@@ -15,9 +15,10 @@ import {
   ACAO_NAO_TOMEI,
   MINUTOS_ADIAR,
 } from './constantes';
+import type { ResultadoPermissao } from './tipos';
 
 // Como a notificação aparece com o app aberto
-export function configurarExibicao() {
+export function configurarExibicao(): void {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
@@ -29,7 +30,7 @@ export function configurarExibicao() {
 }
 
 // Canais do Android (som, vibração, prioridade). No iOS não faz nada.
-export async function criarCanaisAndroid() {
+export async function criarCanaisAndroid(): Promise<void> {
   if (Platform.OS !== 'android') return;
 
   await Notifications.setNotificationChannelAsync(CANAL_DOSES, {
@@ -54,7 +55,7 @@ export async function criarCanaisAndroid() {
 }
 
 // Botões direto na notificação (RF08): Tomei / Adiar / Não tomei
-export async function registrarAcoesDose() {
+export async function registrarAcoesDose(): Promise<void> {
   await Notifications.setNotificationCategoryAsync(CATEGORIA_DOSE, [
     { identifier: ACAO_TOMEI, buttonTitle: 'Tomei', options: { opensAppToForeground: false } },
     {
@@ -66,9 +67,8 @@ export async function registrarAcoesDose() {
   ]);
 }
 
-// Pede permissão (Android 13+ e iOS exigem).
-// Retorna 'concedida', 'negada' ou 'emulador'.
-export async function pedirPermissao() {
+// Pede permissão (Android 13+ e iOS exigem)
+export async function pedirPermissao(): Promise<ResultadoPermissao> {
   if (!Device.isDevice) return 'emulador';
 
   const atual = await Notifications.getPermissionsAsync();
@@ -81,7 +81,7 @@ export async function pedirPermissao() {
 }
 
 // Tudo que precisa rodar uma vez na abertura do app
-export async function inicializarNotificacoes() {
+export async function inicializarNotificacoes(): Promise<ResultadoPermissao> {
   configurarExibicao();
   await criarCanaisAndroid();
   await registrarAcoesDose();

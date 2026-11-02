@@ -1,15 +1,17 @@
 // Constantes do módulo de notificações, espelhando o CONTRATO.md (seções 4, 5 e 6).
 
+import type { StatusDose, TipoAgendamento } from './tipos';
+
 // Agendamento.tipo
-export const TIPO_FIXO = 'fixo';
-export const TIPO_INTERVALO = 'intervalo';
-export const TIPO_DIAS_SEMANA = 'dias_semana';
+export const TIPO_FIXO: TipoAgendamento = 'fixo';
+export const TIPO_INTERVALO: TipoAgendamento = 'intervalo';
+export const TIPO_DIAS_SEMANA: TipoAgendamento = 'dias_semana';
 
 // Dose.status
-export const STATUS_PENDENTE = 'pendente';
-export const STATUS_TOMADA = 'tomada';
-export const STATUS_NAO_TOMADA = 'nao_tomada';
-export const STATUS_ADIADA = 'adiada';
+export const STATUS_PENDENTE: StatusDose = 'pendente';
+export const STATUS_TOMADA: StatusDose = 'tomada';
+export const STATUS_NAO_TOMADA: StatusDose = 'nao_tomada';
+export const STATUS_ADIADA: StatusDose = 'adiada';
 
 // Canais do Android (cada um com som/prioridade próprios)
 export const CANAL_DOSES = 'doses';

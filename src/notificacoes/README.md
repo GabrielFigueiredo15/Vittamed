@@ -1,7 +1,7 @@
 # Notificações — Vittamed (parte do Catter)
 
 Lembretes locais das doses com `expo-notifications`, no mesmo padrão do projeto
-de referência (Expo, JavaScript, `Styles`, `AsyncStorage`, `Alert`).
+de referência (Expo, `Styles`, `AsyncStorage`, `Alert`), escrito em TypeScript.
 
 ## Instalação
 
@@ -15,12 +15,12 @@ No `app.json`, dentro de `"expo"`:
 "plugins": [["expo-notifications", { "color": "#000000" }]]
 ```
 
-## Como usar no App.js
+## Como usar no App.tsx
 
 ```js
 import TelaLembretes from './src/notificacoes/TelaLembretes';
 
-// medicamentos = resposta de GET /medicamentos
+// medicamentos: Medicamento[] = resposta de GET /medicamentos
 <TelaLembretes medicamentos={medicamentos} />
 ```
 
@@ -37,13 +37,14 @@ await cancelarLembretesMedicamento(med.id);  // depois de excluir
 
 | Arquivo | O que faz |
 |---|---|
-| `constantes.js` | Tipos de agendamento, status de dose, canais e ações (contrato) |
-| `agendamento.js` | Calcula os próximos horários (fixo, intervalo, dias da semana, período) |
-| `textos.js` | Títulos e textos das notificações, linguagem simples |
-| `configuracao.js` | Permissão, canais do Android e botões Tomei/Adiar/Não tomei |
-| `agendador.js` | Agenda, lista, cancela e reagenda os lembretes |
-| `TelaLembretes.js` | Tela para ligar/desligar e testar os lembretes |
-| `EstilosNotificacoes.js` | Estilos da tela (fontes e botões grandes) |
+| `tipos.ts` | Interfaces do contrato (Medicamento, Agendamento, Dose, Orientacao) |
+| `constantes.ts` | Tipos de agendamento, status de dose, canais e ações (contrato) |
+| `agendamento.ts` | Calcula os próximos horários (fixo, intervalo, dias da semana, período) |
+| `textos.ts` | Títulos e textos das notificações, linguagem simples |
+| `configuracao.ts` | Permissão, canais do Android e botões Tomei/Adiar/Não tomei |
+| `agendador.ts` | Agenda, lista, cancela e reagenda os lembretes |
+| `TelaLembretes.tsx` | Tela para ligar/desligar e testar os lembretes |
+| `EstilosNotificacoes.ts` | Estilos da tela (fontes e botões grandes) |
 
 Testes: `npx jest src/notificacoes`
 
@@ -52,7 +53,7 @@ Testes: `npx jest src/notificacoes`
 Legenda: ✅ feito · ⬜ a fazer
 
 **Base**
-- ✅ 1. Constantes do contrato (tipos de agendamento, status de dose)
+- ✅ 1. Tipos e constantes do contrato (tipos de agendamento, status de dose)
 - ✅ 2. Calcular próximos horários a partir do `Agendamento` (+ testes)
 - ✅ 3. Textos das notificações (dose, adiada, não tomada, orientação vencida)
 - ✅ 4. Pedir permissão, criar canais do Android e registrar os botões da notificação
