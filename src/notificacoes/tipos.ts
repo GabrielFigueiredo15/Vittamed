@@ -4,7 +4,7 @@ export type TipoAgendamento = 'fixo' | 'intervalo' | 'dias_semana';
 
 export interface Agendamento {
   tipo: TipoAgendamento;
-  horarios?: string[] | null;        // "HH:MM" — tipo=fixo (e usado também em dias_semana)
+  horarios?: string[] | null;        // "HH:MM" — tipo=fixo (usado também em dias_semana)
   intervalo_horas?: number | null;   // tipo=intervalo
   dias_semana?: number[] | null;     // tipo=dias_semana | 0=seg .. 6=dom
 }
@@ -42,7 +42,14 @@ export interface Orientacao {
   concluida?: boolean;
 }
 
-// Dados anexados a cada notificação, usados ao tocar nela.
+// Dados anexados a cada notificação, usados ao tocar nela
 export type DadosNotificacao =
   | { tipo: 'dose'; medicamentoId: string; horarioPrevisto: string; doseId?: string }
   | { tipo: 'orientacao'; orientacaoId: string; medicamentoId: string };
+
+export interface ConteudoNotificacao {
+  titulo: string;
+  corpo: string;
+}
+
+export type ResultadoPermissao = 'concedida' | 'negada' | 'emulador';

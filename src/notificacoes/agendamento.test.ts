@@ -1,6 +1,6 @@
 // Testes de agendamento.ts — rodar com: npx jest src/notificacoes
 import { proximosHorarios, deveLembrar, diaSemanaContrato } from './agendamento';
-import type { Medicamento } from './tipos';
+import type { Agendamento, Medicamento } from './tipos';
 
 const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -48,7 +48,7 @@ describe('proximosHorarios', () => {
   });
 
   test('inativo ou vencido não gera lembretes', () => {
-    const ag = { tipo: 'fixo' as const, horarios: ['08:00'] };
+    const ag: Agendamento = { tipo: 'fixo', horarios: ['08:00'] };
     expect(proximosHorarios({ ...base, ativo: false, agendamento: ag }, AGORA)).toEqual([]);
     expect(deveLembrar({ ...base, periodo_fim: '2026-10-31', agendamento: ag }, AGORA)).toBe(false);
   });

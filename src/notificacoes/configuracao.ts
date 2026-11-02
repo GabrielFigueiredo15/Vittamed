@@ -1,22 +1,23 @@
-// Configuração base das notificações locais no React Native.
-// Usa expo-notifications (funciona em projetos Expo e em React Native "bare"
-// com `npx install-expo-modules`). Instalação:
-//   npx expo install expo-notifications expo-device
+// Configuração base das notificações locais (expo-notifications).
+// Instalação: npx expo install expo-notifications expo-device
 
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 
-export const CANAL_DOSES = 'doses';
-export const CANAL_ORIENTACOES = 'orientacoes';
-export const CANAL_FAMILIA = 'familia';
+import {
+  CANAL_DOSES,
+  CANAL_ORIENTACOES,
+  CANAL_FAMILIA,
+  CATEGORIA_DOSE,
+  ACAO_TOMEI,
+  ACAO_ADIAR,
+  ACAO_NAO_TOMEI,
+  MINUTOS_ADIAR,
+} from './constantes';
+import type { ResultadoPermissao } from './tipos';
 
-export const CATEGORIA_DOSE = 'dose';
-export const ACAO_TOMEI = 'tomei';
-export const ACAO_ADIAR = 'adiar';
-export const ACAO_NAO_TOMEI = 'nao_tomei';
-
-/** Como a notificação aparece com o app aberto. Chamar uma vez no App.tsx. */
+// Como a notificação aparece com o app aberto
 export function configurarExibicao(): void {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -28,7 +29,7 @@ export function configurarExibicao(): void {
   });
 }
 
-/** Canais do Android (som, vibração, prioridade). No iOS não faz nada. */
+// Canais do Android (som, vibração, prioridade). No iOS não faz nada.
 export async function criarCanaisAndroid(): Promise<void> {
   if (Platform.OS !== 'android') return;
 
@@ -38,7 +39,6 @@ export async function criarCanaisAndroid(): Promise<void> {
     sound: 'default',
     vibrationPattern: [0, 500, 300, 500],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    bypassDnd: true,
   });
 
   await Notifications.setNotificationChannelAsync(CANAL_ORIENTACOES, {
@@ -54,18 +54,20 @@ export async function criarCanaisAndroid(): Promise<void> {
   });
 }
 
-/** Botões direto na notificação (RF08): Tomei / Adiar / Não tomei. */
+// Botões direto na notificação (RF08): Tomei / Adiar / Não tomei
 export async function registrarAcoesDose(): Promise<void> {
   await Notifications.setNotificationCategoryAsync(CATEGORIA_DOSE, [
     { identifier: ACAO_TOMEI, buttonTitle: 'Tomei', options: { opensAppToForeground: false } },
-    { identifier: ACAO_ADIAR, buttonTitle: 'Adiar 15 min', options: { opensAppToForeground: false } },
+    {
+      identifier: ACAO_ADIAR,
+      buttonTitle: `Adiar ${MINUTOS_ADIAR} min`,
+      options: { opensAppToForeground: false },
+    },
     { identifier: ACAO_NAO_TOMEI, buttonTitle: 'Não tomei', options: { opensAppToForeground: true } },
   ]);
 }
 
-export type ResultadoPermissao = 'concedida' | 'negada' | 'emulador';
-
-/** Pede permissão de notificação (Android 13+ e iOS exigem). */
+// Pede permissão (Android 13+ e iOS exigem)
 export async function pedirPermissao(): Promise<ResultadoPermissao> {
   if (!Device.isDevice) return 'emulador';
 
@@ -78,7 +80,7 @@ export async function pedirPermissao(): Promise<ResultadoPermissao> {
   return pedido.granted ? 'concedida' : 'negada';
 }
 
-/** Tudo que precisa rodar na inicialização do app. */
+// Tudo que precisa rodar uma vez na abertura do app
 export async function inicializarNotificacoes(): Promise<ResultadoPermissao> {
   configurarExibicao();
   await criarCanaisAndroid();

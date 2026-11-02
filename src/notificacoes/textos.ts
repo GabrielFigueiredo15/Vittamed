@@ -1,19 +1,14 @@
 // Textos das notificações — linguagem direta e curta (RNF05).
 
-import type { Medicamento, Orientacao } from './tipos';
+import type { ConteudoNotificacao, Medicamento, Orientacao } from './tipos';
 
-export interface ConteudoNotificacao {
-  titulo: string;
-  corpo: string;
-}
-
-function formatarHora(data: Date): string {
+export function formatarHora(data: Date): string {
   const h = String(data.getHours()).padStart(2, '0');
   const m = String(data.getMinutes()).padStart(2, '0');
   return `${h}:${m}`;
 }
 
-/** Ex.: "Losartana 50mg — 1 comprimido". */
+// Ex.: "Losartana 50mg (comprimido)"
 function descricaoMedicamento(med: Medicamento): string {
   const partes = [med.nome, med.dosagem].filter(Boolean).join(' ');
   return med.forma_uso ? `${partes} (${med.forma_uso})` : partes;
@@ -33,7 +28,7 @@ export function textoDoseAdiada(med: Medicamento, novoHorario: Date): ConteudoNo
   };
 }
 
-/** Aviso para familiares/cuidadoras (RF09). */
+// Aviso para familiares/cuidadoras (RF09)
 export function textoDoseNaoTomada(med: Medicamento, horarioPrevisto: Date): ConteudoNotificacao {
   return {
     titulo: 'Dose não tomada',
@@ -41,10 +36,10 @@ export function textoDoseNaoTomada(med: Medicamento, horarioPrevisto: Date): Con
   };
 }
 
-/** Orientação vencida — revisão até concluir ou excluir (RF14). */
+// Orientação vencida — revisar até concluir ou excluir (RF14)
 export function textoOrientacaoVencida(
   orientacao: Orientacao,
-  med?: Medicamento,
+  med?: Medicamento
 ): ConteudoNotificacao {
   const resumo =
     orientacao.texto.length > 80 ? `${orientacao.texto.slice(0, 77)}...` : orientacao.texto;
