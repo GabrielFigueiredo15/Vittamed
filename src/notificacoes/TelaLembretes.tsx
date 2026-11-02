@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import estilo from './EstilosNotificacoes';
 import { CHAVE_LEMBRETES_ATIVOS } from './constantes';
+import type { Medicamento, ResultadoPermissao } from './tipos';
 import { inicializarNotificacoes } from './configuracao';
 import {
   reagendarTodos,
@@ -22,21 +23,24 @@ import {
   enviarNotificacaoTeste
 } from './agendador';
 
-// Tela de configuração dos lembretes.
-// Recebe a lista de medicamentos já carregada (GET /medicamentos).
-export default function TelaLembretes({ medicamentos = [] }) {
+interface Props {
+  medicamentos?: Medicamento[]; // lista já carregada (GET /medicamentos)
+}
 
-  const [ativo, setAtivo] = useState(true);
-  const [permissao, setPermissao] = useState('');
-  const [quantidade, setQuantidade] = useState(0);
-  const [carregando, setCarregando] = useState(true);
-  const [salvando, setSalvando] = useState(false);
+// Tela de configuração dos lembretes
+export default function TelaLembretes({ medicamentos = [] }: Props) {
+
+  const [ativo, setAtivo] = useState<boolean>(true);
+  const [permissao, setPermissao] = useState<ResultadoPermissao | null>(null);
+  const [quantidade, setQuantidade] = useState<number>(0);
+  const [carregando, setCarregando] = useState<boolean>(true);
+  const [salvando, setSalvando] = useState<boolean>(false);
 
   useEffect(() => {
     carregar();
   }, []);
 
-  const carregar = async () => {
+  const carregar = async (): Promise<void> => {
 
     try {
       const valorSalvo = await AsyncStorage.getItem(CHAVE_LEMBRETES_ATIVOS);
@@ -53,7 +57,7 @@ export default function TelaLembretes({ medicamentos = [] }) {
     }
   };
 
-  const salvar = async () => {
+  const salvar = async (): Promise<void> => {
 
     setSalvando(true);
 
@@ -82,7 +86,7 @@ export default function TelaLembretes({ medicamentos = [] }) {
     }
   };
 
-  const testar = async () => {
+  const testar = async (): Promise<void> => {
 
     try {
       await enviarNotificacaoTeste(5);
