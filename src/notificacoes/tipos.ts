@@ -52,4 +52,4 @@ export interface ConteudoNotificacao {
   corpo: string;
 }
 
-export type ResultadoPermissao = 'concedida' | 'negada' | 'emulador';
+export type ResultadoPermissao = 'concedida' | 'negada';

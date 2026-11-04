@@ -5,17 +5,14 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  Linking
+  ActivityIndicator
 } from 'react-native';
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import estilo from './EstilosNotificacoes';
 import { CHAVE_LEMBRETES_ATIVOS } from './constantes';
 import type { Medicamento, ResultadoPermissao } from './tipos';
-import { inicializarNotificacoes } from './configuracao';
+import { inicializarNotificacoes, pedirPermissao } from './configuracao';
+import { lerValor, salvarValor } from './armazenamento';
 import {
   reagendarTodos,
   cancelarTodosLembretes,
@@ -26,6 +23,11 @@ import {
 interface Props {
   medicamentos?: Medicamento[]; // lista já carregada (GET /medicamentos)
 }
+
+// Alert do react-native não faz nada na web; usamos o alert do navegador
+const avisar = (titulo: string, mensagem: string): void => {
+  window.alert(`${titulo}\n\n${mensagem}`);
+};
 
 // Tela de configuração dos lembretes
 export default function TelaLembretes({ medicamentos = [] }: Props) {
@@ -43,9 +45,7 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
   const carregar = async (): Promise<void> => {
 
     try {
-      const valorSalvo = await AsyncStorage.getItem(CHAVE_LEMBRETES_ATIVOS);
-      setAtivo(valorSalvo !== 'false'); // ligado por padrão
-
+      setAtivo(lerValor(CHAVE_LEMBRETES_ATIVOS) !== 'false'); // ligado por padrão
       setPermissao(await inicializarNotificacoes());
 
       const agendados = await listarLembretesDose();
@@ -63,23 +63,24 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
 
     try {
 
-      await AsyncStorage.setItem(CHAVE_LEMBRETES_ATIVOS, String(ativo));
+      salvarValor(CHAVE_LEMBRETES_ATIVOS, String(ativo));
 
       if (ativo) {
+        setPermissao(await pedirPermissao());
         const total = await reagendarTodos(medicamentos);
         setQuantidade(total);
-        Alert.alert('Pronto', `Lembretes ligados. ${total} próximos horários agendados.`);
+        avisar('Pronto', `Lembretes ligados. ${total} próximos horários agendados. Mantenha esta página aberta.`);
       } else {
         await cancelarTodosLembretes();
         setQuantidade(0);
-        Alert.alert('Pronto', 'Lembretes desligados.');
+        avisar('Pronto', 'Lembretes desligados.');
       }
 
     } catch (error) {
 
       console.log(error);
 
-      Alert.alert('Erro', 'Não foi possível salvar os lembretes.');
+      avisar('Erro', 'Não foi possível salvar os lembretes.');
 
     } finally {
       setSalvando(false);
@@ -89,11 +90,12 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
   const testar = async (): Promise<void> => {
 
     try {
+      setPermissao(await pedirPermissao());
       await enviarNotificacaoTeste(5);
-      Alert.alert('Teste', 'Um lembrete de teste vai tocar em 5 segundos.');
+      avisar('Teste', 'Um lembrete de teste vai aparecer em 5 segundos.');
     } catch (error) {
       console.log(error);
-      Alert.alert('Erro', 'Não foi possível enviar o teste.');
+      avisar('Erro', 'Não foi possível enviar o teste.');
     }
   };
 
@@ -105,7 +107,8 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
     );
   }
 
-  const semPermissao = permissao === 'negada';
+  const semPermissao = permissao === 'negada' && typeof Notification !== 'undefined'
+    && Notification.permission === 'denied';
 
   return (
     <ScrollView style={estilo.container} contentContainerStyle={estilo.conteudo}>
@@ -114,7 +117,7 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
 
       <View style={estilo.caixa}>
         <Text style={estilo.paragrafo}>
-          O celular vai avisar na hora de tomar cada remédio, mesmo com o aplicativo fechado.
+          O navegador vai avisar na hora de tomar cada remédio, enquanto esta página estiver aberta.
         </Text>
         <Text style={estilo.paragrafo}>
           Próximos lembretes agendados: {quantidade}
@@ -122,13 +125,7 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
 
         {semPermissao && (
           <Text style={estilo.aviso}>
-            As notificações estão bloqueadas. Libere nas configurações do celular.
-          </Text>
-        )}
-
-        {permissao === 'emulador' && (
-          <Text style={estilo.aviso}>
-            Use um celular de verdade para testar os lembretes.
+            As notificações estão bloqueadas. Libere nas configurações do site no navegador.
           </Text>
         )}
       </View>
@@ -150,25 +147,14 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
         </Text>
       </TouchableOpacity>
 
-      {semPermissao ? (
-        <TouchableOpacity
-          style={[estilo.botao, estilo.botaoSecundario]}
-          onPress={() => Linking.openSettings()}
-        >
-          <Text style={[estilo.textoBotao, estilo.textoBotaoSecundario]}>
-            Abrir configurações
-          </Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={[estilo.botao, estilo.botaoSecundario]}
-          onPress={testar}
-        >
-          <Text style={[estilo.textoBotao, estilo.textoBotaoSecundario]}>
-            Testar lembrete
-          </Text>
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        style={[estilo.botao, estilo.botaoSecundario]}
+        onPress={testar}
+      >
+        <Text style={[estilo.textoBotao, estilo.textoBotaoSecundario]}>
+          Testar lembrete
+        </Text>
+      </TouchableOpacity>
 
     </ScrollView>
   );

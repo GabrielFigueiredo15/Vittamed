@@ -1,28 +1,17 @@
-# Notificações — Vittamed (parte do Catter)
+# Notificações — Vittamed
 
-Lembretes locais das doses com `expo-notifications`, no mesmo padrão do projeto
-de referência (Expo, `Styles`, `AsyncStorage`, `Alert`), escrito em TypeScript.
+Lembretes das doses em React Native (web, via react-native-web + Vite), sem Expo.
 
-## Instalação
+## Rodar no VS Code
 
 ```bash
-npx expo install expo-notifications expo-device @react-native-async-storage/async-storage
+npm install
+npm run dev      # abre em http://localhost:5173
+npm test         # testes
+npm run simular  # mostra próximos horários
 ```
 
-No `app.json`, dentro de `"expo"`:
-
-```json
-"plugins": [["expo-notifications", { "color": "#000000" }]]
-```
-
-## Como usar no App.tsx
-
-```js
-import TelaLembretes from './src/notificacoes/TelaLembretes';
-
-// medicamentos: Medicamento[] = resposta de GET /medicamentos
-<TelaLembretes medicamentos={medicamentos} />
-```
+Os avisos usam a Notification API do navegador e só tocam com a página aberta.
 
 Sempre que um medicamento for criado, editado ou excluído:
 
@@ -41,10 +30,12 @@ await cancelarLembretesMedicamento(med.id);  // depois de excluir
 | `constantes.ts` | Tipos de agendamento, status de dose, canais e ações (contrato) |
 | `agendamento.ts` | Calcula os próximos horários (fixo, intervalo, dias da semana, período) |
 | `textos.ts` | Títulos e textos das notificações, linguagem simples |
-| `configuracao.ts` | Permissão, canais do Android e botões Tomei/Adiar/Não tomei |
+| `notificador.ts` | Agendador local (setTimeout) que exibe o aviso via Notification API |
+| `armazenamento.ts` | Guarda configurações no localStorage |
 | `agendador.ts` | Agenda, lista, cancela e reagenda os lembretes |
-| `TelaLembretes.tsx` | Tela para ligar/desligar e testar os lembretes |
+| `TelaLembretes.tsx` | Tela (React Native) para ligar/desligar e testar |
 | `EstilosNotificacoes.ts` | Estilos da tela (fontes e botões grandes) |
+| `configuracao.ts` | Permissão de notificações do navegador |
 
 Testes: `npx jest src/notificacoes`
 
