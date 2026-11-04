@@ -3,10 +3,7 @@ import { StyleSheet } from 'react-native';
 // Fontes e botões maiores que o padrão: público idoso (RNF05)
 export default StyleSheet.create({
 
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5'
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
 
   containerCarregando: {
     flex: 1,
@@ -15,104 +12,56 @@ export default StyleSheet.create({
     backgroundColor: '#f5f5f5'
   },
 
-  conteudo: {
-    padding: 25,
-    paddingTop: 60,
-    paddingBottom: 40
-  },
+  conteudo: { padding: 25, paddingTop: 60 },
 
-  titulo: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#222222'
-  },
+  titulo: { fontSize: 32, fontWeight: 'bold', color: '#000000', marginBottom: 20 },
 
   caixa: {
     backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#cccccc',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 25
+    borderColor: '#dddddd'
   },
 
-  paragrafo: {
-    fontSize: 18,
-    lineHeight: 26,
-    color: '#333333'
-  },
+  paragrafo: { fontSize: 20, color: '#222222', marginBottom: 10, lineHeight: 28 },
 
-  aviso: {
-    fontSize: 18,
-    lineHeight: 26,
-    color: '#b00020',
-    marginTop: 10
-  },
+  aviso: { fontSize: 18, color: '#b00020', fontWeight: 'bold', marginTop: 5 },
 
-  linhaCheckbox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 25,
-    minHeight: 48
-  },
+  linhaCheckbox: { flexDirection: 'row', alignItems: 'center', marginBottom: 25 },
 
   checkbox: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderWidth: 2,
-    borderColor: '#555555',
+    borderColor: '#000000',
     borderRadius: 6,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-    backgroundColor: '#ffffff'
+    marginRight: 15
   },
 
-  checkboxMarcado: {
-    backgroundColor: '#000000',
-    borderColor: '#000000'
-  },
+  checkboxMarcado: { backgroundColor: '#000000' },
 
-  checkboxSimbolo: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: 'bold'
-  },
+  checkboxSimbolo: { color: '#ffffff', fontSize: 24, fontWeight: 'bold' },
 
-  textoCheckbox: {
-    flex: 1,
-    fontSize: 19,
-    color: '#222222'
-  },
+  textoCheckbox: { flex: 1, fontSize: 20, color: '#000000' },
 
   botao: {
     backgroundColor: '#000000',
-    borderRadius: 8,
-    padding: 18,
+    borderRadius: 10,
+    paddingVertical: 18,
     alignItems: 'center',
     marginBottom: 15
   },
 
-  botaoSecundario: {
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#000000'
-  },
+  botaoDesabilitado: { opacity: 0.5 },
 
-  botaoDesabilitado: {
-    backgroundColor: '#cccccc',
-    borderColor: '#cccccc'
-  },
+  textoBotao: { color: '#ffffff', fontSize: 22, fontWeight: 'bold' },
 
-  textoBotao: {
-    color: '#ffffff',
-    fontSize: 19,
-    fontWeight: 'bold'
-  },
+  botaoSecundario: { backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#000000' },
 
-  textoBotaoSecundario: {
-    color: '#000000'
-  }
-
+  textoBotaoSecundario: { color: '#000000' }
 });

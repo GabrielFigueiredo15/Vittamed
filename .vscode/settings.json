@@ -1,0 +1,5 @@
+{
+  "jest.jestCommandLine": "npx jest",
+  "jest.runMode": "on-demand",
+  "typescript.tsdk": "node_modules/typescript/lib"
+}
