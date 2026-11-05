@@ -1,5 +1,5 @@
 // Agenda e cancela os lembretes das doses (RF07).
-// Os lembretes ficam em memória no processo Node (veja notificador.ts).
+// No Android os lembretes ficam no sistema (notificador.native.ts); na web, em memória (notificador.ts).
 
 import {
   agendarNotificacao,
@@ -38,21 +38,21 @@ export async function agendarLembreteDose(med: Medicamento, horario: Date): Prom
 
 // Lista só os lembretes de dose
 export async function listarLembretesDose(): Promise<NotificacaoAgendada[]> {
-  return listarAgendadas().filter((n) => n.identifier.startsWith(PREFIXO_DOSE));
+  return (await listarAgendadas()).filter((n) => n.identifier.startsWith(PREFIXO_DOSE));
 }
 
 // Cancela os lembretes de um medicamento (ao editar, excluir ou encerrar)
 export async function cancelarLembretesMedicamento(medicamentoId: string): Promise<void> {
   const prefixo = `${PREFIXO_DOSE}${medicamentoId}_`;
   for (const lembrete of await listarLembretesDose()) {
-    if (lembrete.identifier.startsWith(prefixo)) cancelarNotificacao(lembrete.identifier);
+    if (lembrete.identifier.startsWith(prefixo)) await cancelarNotificacao(lembrete.identifier);
   }
 }
 
 // Cancela todos os lembretes de dose
 export async function cancelarTodosLembretes(): Promise<void> {
   for (const lembrete of await listarLembretesDose()) {
-    cancelarNotificacao(lembrete.identifier);
+    await cancelarNotificacao(lembrete.identifier);
   }
 }
 

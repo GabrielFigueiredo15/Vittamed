@@ -2,7 +2,7 @@
 // caso o localStorage não exista (ex.: testes em Node).
 const memoria = new Map<string, string>();
 
-export function lerValor(chave: string): string | null {
+export async function lerValor(chave: string): Promise<string | null> {
   try {
     return globalThis.localStorage?.getItem(chave) ?? memoria.get(chave) ?? null;
   } catch {
@@ -10,7 +10,7 @@ export function lerValor(chave: string): string | null {
   }
 }
 
-export function salvarValor(chave: string, valor: string): void {
+export async function salvarValor(chave: string, valor: string): Promise<void> {
   memoria.set(chave, valor);
   try {
     globalThis.localStorage?.setItem(chave, valor);

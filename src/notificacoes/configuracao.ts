@@ -17,3 +17,13 @@ export async function pedirPermissao(): Promise<ResultadoPermissao> {
 export async function inicializarNotificacoes(): Promise<ResultadoPermissao> {
   return notificacoesSuportadas() && Notification.permission === 'granted' ? 'concedida' : 'negada';
 }
+
+// Bloqueada de vez: o usuário precisa liberar nas configurações do site
+export async function permissaoBloqueada(): Promise<boolean> {
+  return notificacoesSuportadas() && Notification.permission === 'denied';
+}
+
+// Web: só com a página aberta
+export function notificacoesNativas(): boolean {
+  return false;
+}
