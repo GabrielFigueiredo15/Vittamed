@@ -5,13 +5,20 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert,
+  Platform
 } from 'react-native';
 
 import estilo from './EstilosNotificacoes';
 import { CHAVE_LEMBRETES_ATIVOS } from './constantes';
 import type { Medicamento, ResultadoPermissao } from './tipos';
-import { inicializarNotificacoes, pedirPermissao } from './configuracao';
+import {
+  inicializarNotificacoes,
+  pedirPermissao,
+  permissaoBloqueada,
+  notificacoesNativas
+} from './configuracao';
 import { lerValor, salvarValor } from './armazenamento';
 import {
   reagendarTodos,
@@ -24,8 +31,14 @@ interface Props {
   medicamentos?: Medicamento[]; // lista já carregada (GET /medicamentos)
 }
 
-// Alert do react-native não faz nada na web; usamos o alert do navegador
+const NATIVO = Platform.OS !== 'web';
+
+// Alert do react-native não faz nada na web; lá usamos o alert do navegador
 const avisar = (titulo: string, mensagem: string): void => {
+  if (NATIVO) {
+    Alert.alert(titulo, mensagem);
+    return;
+  }
   window.alert(`${titulo}\n\n${mensagem}`);
 };
 
@@ -35,6 +48,7 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
   const [ativo, setAtivo] = useState<boolean>(true);
   const [permissao, setPermissao] = useState<ResultadoPermissao | null>(null);
   const [quantidade, setQuantidade] = useState<number>(0);
+  const [bloqueada, setBloqueada] = useState<boolean>(false);
   const [carregando, setCarregando] = useState<boolean>(true);
   const [salvando, setSalvando] = useState<boolean>(false);
 
@@ -45,8 +59,9 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
   const carregar = async (): Promise<void> => {
 
     try {
-      setAtivo(lerValor(CHAVE_LEMBRETES_ATIVOS) !== 'false'); // ligado por padrão
+      setAtivo((await lerValor(CHAVE_LEMBRETES_ATIVOS)) !== 'false'); // ligado por padrão
       setPermissao(await inicializarNotificacoes());
+      setBloqueada(await permissaoBloqueada());
 
       const agendados = await listarLembretesDose();
       setQuantidade(agendados.length);
@@ -63,13 +78,14 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
 
     try {
 
-      salvarValor(CHAVE_LEMBRETES_ATIVOS, String(ativo));
+      await salvarValor(CHAVE_LEMBRETES_ATIVOS, String(ativo));
 
       if (ativo) {
         setPermissao(await pedirPermissao());
+        setBloqueada(await permissaoBloqueada());
         const total = await reagendarTodos(medicamentos);
         setQuantidade(total);
-        avisar('Pronto', `Lembretes ligados. ${total} próximos horários agendados. Mantenha esta página aberta.`);
+        avisar('Pronto', `Lembretes ligados. ${total} próximos horários agendados.${notificacoesNativas() ? '' : ' Mantenha o app aberto.'}`);
       } else {
         await cancelarTodosLembretes();
         setQuantidade(0);
@@ -91,6 +107,7 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
 
     try {
       setPermissao(await pedirPermissao());
+      setBloqueada(await permissaoBloqueada());
       await enviarNotificacaoTeste(5);
       avisar('Teste', 'Um lembrete de teste vai aparecer em 5 segundos.');
     } catch (error) {
@@ -107,8 +124,7 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
     );
   }
 
-  const semPermissao = permissao === 'negada' && typeof Notification !== 'undefined'
-    && Notification.permission === 'denied';
+  const semPermissao = permissao === 'negada' && bloqueada;
 
   return (
     <ScrollView style={estilo.container} contentContainerStyle={estilo.conteudo}>
@@ -117,7 +133,11 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
 
       <View style={estilo.caixa}>
         <Text style={estilo.paragrafo}>
-          O navegador vai avisar na hora de tomar cada remédio, enquanto esta página estiver aberta.
+          {notificacoesNativas()
+            ? 'O aparelho vai avisar na hora de tomar cada remédio, mesmo com o app fechado.'
+            : NATIVO
+            ? 'Modo Expo Go: os avisos aparecem só com o app aberto. Para avisos com o app fechado, use npm run android.'
+            : 'O navegador vai avisar na hora de tomar cada remédio, enquanto esta página estiver aberta.'}
         </Text>
         <Text style={estilo.paragrafo}>
           Próximos lembretes agendados: {quantidade}
@@ -125,7 +145,10 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
 
         {semPermissao && (
           <Text style={estilo.aviso}>
-            As notificações estão bloqueadas. Libere nas configurações do site no navegador.
+            As notificações estão bloqueadas.{' '}
+            {NATIVO
+              ? 'Libere nas configurações do aparelho.'
+              : 'Libere nas configurações do site no navegador.'}
           </Text>
         )}
       </View>

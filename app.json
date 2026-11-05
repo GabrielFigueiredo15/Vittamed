@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Vittamed",
+    "slug": "vittamed",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.vittamed.app",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "SCHEDULE_EXACT_ALARM",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "plugins": ["expo-notifications"]
+  }
+}
