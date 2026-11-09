@@ -4,7 +4,9 @@ const memoria = new Map<string, string>();
 
 export async function lerValor(chave: string): Promise<string | null> {
   try {
-    return globalThis.localStorage?.getItem(chave) ?? memoria.get(chave) ?? null;
+    // Com localStorage disponível ele manda; a memória só vale quando não há localStorage
+    if (globalThis.localStorage) return globalThis.localStorage.getItem(chave);
+    return memoria.get(chave) ?? null;
   } catch {
     return memoria.get(chave) ?? null;
   }
