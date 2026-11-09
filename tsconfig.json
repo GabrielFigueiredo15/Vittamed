@@ -2,6 +2,12 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "customConditions": ["react-native"],
+    "allowJs": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
     "lib": [
       "ES2020",
       "DOM"
@@ -18,6 +24,5 @@
   "include": [
     "src",
     "scripts"
-  ],
-  "extends": "expo/tsconfig.base"
+  ]
 }

@@ -28,3 +28,4 @@ export const MINUTOS_ADIAR = 15;
 
 // Chave do AsyncStorage para a preferência do usuário
 export const CHAVE_LEMBRETES_ATIVOS = '@lembretes_ativos';
+export const CHAVE_MEDICAMENTOS = '@medicamentos';

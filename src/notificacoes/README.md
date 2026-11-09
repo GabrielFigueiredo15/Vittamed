@@ -12,6 +12,7 @@ npm run simular  # mostra próximos horários
 ```
 
 Os avisos usam a Notification API do navegador e só tocam com a página aberta.
+O app inicia com medicamentos de exemplo; cadastros feitos pela tela são salvos no navegador ou no aparelho.
 
 Sempre que um medicamento for criado, editado ou excluído:
 
@@ -27,17 +28,54 @@ await cancelarLembretesMedicamento(med.id);  // depois de excluir
 | Arquivo | O que faz |
 |---|---|
 | `tipos.ts` | Interfaces do contrato (Medicamento, Agendamento, Dose, Orientacao) |
+| `apiDoses.ts` | Cliente autenticado para criar e atualizar doses na API |
+| `respostasNotificacao.native.ts` | Registra ações e ouve toques e botões das notificações nativas |
 | `constantes.ts` | Tipos de agendamento, status de dose, canais e ações (contrato) |
 | `agendamento.ts` | Calcula os próximos horários (fixo, intervalo, dias da semana, período) |
 | `textos.ts` | Títulos e textos das notificações, linguagem simples |
 | `notificador.ts` | Agendador local (setTimeout) que exibe o aviso via Notification API |
 | `armazenamento.ts` | Guarda configurações no localStorage |
 | `agendador.ts` | Agenda, lista, cancela e reagenda os lembretes |
+| `TelaMedicamentos.tsx` | Cadastro, edição e exclusão local de medicamentos com atualização dos lembretes |
 | `TelaLembretes.tsx` | Tela (React Native) para ligar/desligar e testar |
 | `EstilosNotificacoes.ts` | Estilos da tela (fontes e botões grandes) |
 | `configuracao.ts` | Permissão de notificações do navegador |
 
 Testes: `npx jest src/notificacoes`
+
+Ao tocar em uma notificação nativa ou em uma de suas ações, o app recebe a resposta por `addNotificationResponseReceivedListener`, inclusive quando foi iniciado a partir do toque. Nesta etapa a resposta é identificada e exibida; os botões ainda não atualizam o status da dose na API. Essa integração está nas tarefas 15–18.
+
+### Estado da integração com a API de doses
+
+O cliente abaixo está implementado e seus testes usam respostas simuladas. **Ele ainda não foi conectado nem validado contra o backend real.** A tarefa 13 cobre somente a implementação isolada do cliente; não significa que a integração com a API esteja concluída.
+
+Antes de usar em produção, confirme com o backend:
+
+- a URL base e a forma de obter/renovar o token;
+- os campos aceitos por `POST /doses` e `PATCH /doses/{id}`;
+- se ambos retornam a dose completa em JSON e quais são os formatos de erro;
+- os códigos HTTP e eventuais requisitos adicionais de autenticação.
+
+Se o backend não retornar uma dose completa em JSON, será necessário ajustar o cliente ao contrato real. As telas e os botões do app ainda não chamam este cliente; isso será feito nas tarefas de fluxo de registro da dose.
+
+O cliente da API recebe URL e token na criação e devolve a dose retornada pelo backend:
+
+```ts
+import { criarClienteDoses } from './src/notificacoes/apiDoses';
+
+const apiDoses = criarClienteDoses({
+  baseUrl: 'https://api.exemplo.com',
+  token: tokenDeAcesso,
+});
+
+const dose = await apiDoses.criarDose({
+  medicamento_id: 'med-123',
+  horario_previsto: new Date().toISOString(),
+});
+await apiDoses.atualizarDose(dose.id, { status: 'tomada' });
+```
+
+O cliente espera que os dois endpoints retornem o objeto `Dose` em JSON. A URL e o token devem vir da configuração/autenticação do app; não os grave no código-fonte.
 
 ## Microtarefas
 
@@ -55,13 +93,13 @@ Legenda: ✅ feito · ⬜ a fazer
 - ✅ 7. Reagendar tudo respeitando o limite de 64 do iOS
 - ✅ 8. Notificação de teste
 - ✅ 9. Tela de lembretes (ligar/desligar salvo no AsyncStorage, testar, abrir configurações)
-- ⬜ 10. Chamar `reagendarTodos` ao abrir o app e ao voltar do segundo plano (`AppState`)
-- ⬜ 11. Chamar `reagendarTodos` / `cancelarLembretesMedicamento` nas telas de cadastro de medicamento
-- ⬜ 12. Adicionar o plugin no `app.json` do app principal
+- ✅ 10. Chamar `reagendarTodos` ao abrir o app e ao voltar do segundo plano (`AppState`)
+- ✅ 11. Chamar `reagendarTodos` / `cancelarLembretesMedicamento` no cadastro local de medicamentos
+- ✅ 12. Adicionar o plugin `expo-notifications` no `app.json` do app principal
 
 **Registro da dose (RF08)**
-- ⬜ 13. Cliente da API: `POST /doses` e `PATCH /doses/{id}` com `Authorization: Bearer`
-- ⬜ 14. Ouvir o toque/botão da notificação (`addNotificationResponseReceivedListener`)
+- ✅ 13. Implementar cliente isolado para `POST /doses` e `PATCH /doses/{id}` com `Authorization: Bearer` (contrato real ainda não validado)
+- ✅ 14. Ouvir o toque/botão da notificação (`addNotificationResponseReceivedListener`)
 - ⬜ 15. Botão **Tomei** → `PATCH` `status=tomada`
 - ⬜ 16. Botão **Adiar** → `PATCH` `status=adiada` + `novo_horario` e agendar novo lembrete
 - ⬜ 17. Botão **Não tomei** → `PATCH` `status=nao_tomada`

@@ -3,18 +3,14 @@
 const memoria = new Map<string, string>();
 
 export async function lerValor(chave: string): Promise<string | null> {
-  try {
-    return globalThis.localStorage?.getItem(chave) ?? memoria.get(chave) ?? null;
-  } catch {
-    return memoria.get(chave) ?? null;
-  }
+  const armazenamento = globalThis.localStorage;
+  return armazenamento
+    ? armazenamento.getItem(chave) ?? memoria.get(chave) ?? null
+    : memoria.get(chave) ?? null;
 }
 
 export async function salvarValor(chave: string, valor: string): Promise<void> {
+  const armazenamento = globalThis.localStorage;
+  if (armazenamento) armazenamento.setItem(chave, valor);
   memoria.set(chave, valor);
-  try {
-    globalThis.localStorage?.setItem(chave, valor);
-  } catch {
-    // armazenamento bloqueado: fica só em memória
-  }
 }

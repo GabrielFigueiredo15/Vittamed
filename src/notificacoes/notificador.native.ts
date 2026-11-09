@@ -2,7 +2,7 @@
 // As notificações ficam no AlarmManager do sistema: disparam com o app fechado.
 // Se o módulo nativo não existir (Expo Go), cai no agendador em memória.
 import { Alert } from 'react-native';
-import { CANAL_DOSES } from './constantes';
+import { CANAL_DOSES, CATEGORIA_DOSE } from './constantes';
 import { obterNotificacoes } from './expoNotifications.native';
 import * as memoria from './notificadorMemoria';
 import type { PedidoNotificacao, NotificacaoAgendada } from './notificadorMemoria';
@@ -23,6 +23,15 @@ export async function agendarNotificacao(pedido: PedidoNotificacao): Promise<str
   const N = obterNotificacoes();
   if (!N) return memoria.agendarNotificacao(pedido);
 
+  const dados = pedido.content.data;
+  const categoria =
+    typeof dados === 'object' &&
+    dados !== null &&
+    'tipo' in dados &&
+    dados.tipo === 'dose'
+      ? CATEGORIA_DOSE
+      : undefined;
+
   const trigger: import('expo-notifications').NotificationTriggerInput =
     'date' in pedido.trigger
       ? {
@@ -42,6 +51,7 @@ export async function agendarNotificacao(pedido: PedidoNotificacao): Promise<str
       title: pedido.content.title,
       body: pedido.content.body,
       data: (pedido.content.data ?? {}) as Record<string, unknown>,
+      ...(categoria ? { categoryIdentifier: categoria } : {}),
       sound: true,
     },
     trigger,
