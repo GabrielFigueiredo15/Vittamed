@@ -1,6 +1,8 @@
 # Notificações — Vittamed
 
-Lembretes das doses em React Native (web, via react-native-web + Vite), sem Expo.
+Lembretes das doses em React Native: Android (Expo) e web (react-native-web + Vite).
+
+O app completo (login, início, remédios, orientações, perfil) fica em `src/interface`; este módulo cuida só dos lembretes.
 
 ## Rodar no VS Code
 
@@ -94,20 +96,20 @@ Legenda: ✅ feito · ⬜ a fazer
 - ✅ 8. Notificação de teste
 - ✅ 9. Tela de lembretes (ligar/desligar salvo no AsyncStorage, testar, abrir configurações)
 - ✅ 10. Chamar `reagendarTodos` ao abrir o app e ao voltar do segundo plano (`AppState`)
-- ✅ 11. Chamar `reagendarTodos` / `cancelarLembretesMedicamento` no cadastro local de medicamentos
-- ✅ 12. Adicionar o plugin `expo-notifications` no `app.json` do app principal
+- ✅ 11. Chamar `reagendarTodos` / `cancelarLembretesMedicamento` nas telas de cadastro de medicamento
+- ✅ 12. Adicionar o plugin no `app.json` do app principal
 
 **Registro da dose (RF08)**
-- ✅ 13. Implementar cliente isolado para `POST /doses` e `PATCH /doses/{id}` com `Authorization: Bearer` (contrato real ainda não validado)
+- ✅ 13. Cliente isolado para `POST /doses` e `PATCH /doses/{id}` com `Authorization: Bearer` (`apiDoses.ts`; contrato real ainda não validado e ainda não ligado às telas)
 - ✅ 14. Ouvir o toque/botão da notificação (`addNotificationResponseReceivedListener`)
-- ⬜ 15. Botão **Tomei** → `PATCH` `status=tomada`
-- ⬜ 16. Botão **Adiar** → `PATCH` `status=adiada` + `novo_horario` e agendar novo lembrete
-- ⬜ 17. Botão **Não tomei** → `PATCH` `status=nao_tomada`
-- ⬜ 18. Tela de confirmação da dose (aberta ao tocar na notificação) com botões grandes
+- ✅ 15. Botão **Tomei** → registra `status=tomada` (local; o `PATCH` depende da 13)
+- ✅ 16. Botão **Adiar** → registra `status=adiada` + `novo_horario` e agenda novo lembrete (local)
+- ✅ 17. Botão **Não tomei** → registra `status=nao_tomada` (local)
+- ✅ 18. Tela de confirmação da dose (aberta ao tocar na notificação) com botões grandes
 
 **Orientações (RF14)**
-- ⬜ 19. Buscar `GET /orientacoes` e agendar lembrete diário para as vencidas e não concluídas
-- ⬜ 20. Cancelar o lembrete quando a orientação for concluída ou excluída
+- ✅ 19. Lembrete diário às 9h para orientações vencidas e não concluídas (local; falta ligar ao `GET /orientacoes`)
+- ✅ 20. Cancelar o lembrete quando a orientação for concluída ou excluída
 
 **Aviso à família (RF09)**
 - ⬜ 21. Registrar token de push do aparelho (exige *development build*; Expo Go não recebe push remoto no Android)

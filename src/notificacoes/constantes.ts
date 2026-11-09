@@ -15,6 +15,10 @@ export const STATUS_ADIADA: StatusDose = 'adiada';
 
 // Canais do Android (cada um com som/prioridade próprios)
 export const CANAL_DOSES = 'doses';
+// Um canal por formato de lembrete (no Android o som/vibração é do canal)
+export const CANAL_DOSES_VISUAL = 'doses_visual';
+export const CANAL_DOSES_SOM = 'doses_som';
+export const CANAL_DOSES_VIBRACAO = 'doses_vibracao';
 export const CANAL_ORIENTACOES = 'orientacoes';
 export const CANAL_FAMILIA = 'familia';
 

@@ -2,57 +2,85 @@
 // As notificações ficam no AlarmManager do sistema: disparam com o app fechado.
 // Se o módulo nativo não existir (Expo Go), cai no agendador em memória.
 import { Alert } from 'react-native';
-import { CANAL_DOSES, CATEGORIA_DOSE } from './constantes';
+import { CANAL_DOSES, CANAL_DOSES_VISUAL, CATEGORIA_DOSE } from './constantes';
 import { obterNotificacoes } from './expoNotifications.native';
 import * as memoria from './notificadorMemoria';
-import type { PedidoNotificacao, NotificacaoAgendada } from './notificadorMemoria';
+import type { PedidoNotificacao, NotificacaoAgendada, AoTocar } from './notificadorMemoria';
+import type { DadosNotificacao } from './tipos';
 
-export type { PedidoNotificacao, NotificacaoAgendada } from './notificadorMemoria';
+export type { PedidoNotificacao, NotificacaoAgendada, AoTocar } from './notificadorMemoria';
 
 type Exibidor = (n: NotificacaoAgendada) => void;
 
 // Fallback (Expo Go): mostra o aviso num Alert, só com o app aberto
-memoria.definirExibidor((n) => Alert.alert(n.content.title, n.content.body));
+memoria.definirExibidor((n) =>
+  Alert.alert(n.content.title, n.content.body, [
+    { text: 'Depois', style: 'cancel' },
+    { text: 'Abrir', onPress: () => memoria.dispararToque(n.content.data as DadosNotificacao) },
+  ])
+);
 
 // Troca a forma de exibir o aviso no fallback em memória
 export function definirExibidor(fn: Exibidor | null): void {
   memoria.definirExibidor(fn);
 }
 
+let ultimaResposta = '';
+
+// Trata o toque na notificação (ou em um botão dela). Se o app foi aberto por
+// uma notificação, o toque que o abriu também é entregue.
+export function ouvirToque(fn: AoTocar): () => void {
+  const desfazerMemoria = memoria.ouvirToque(fn);
+  const N = obterNotificacoes();
+  if (!N) return desfazerMemoria;
+
+  const tratar = (resposta: import('expo-notifications').NotificationResponse): void => {
+    const id = `${resposta.notification.request.identifier}:${resposta.actionIdentifier}`;
+    if (id === ultimaResposta) return;
+    ultimaResposta = id;
+    const acao =
+      resposta.actionIdentifier === N.DEFAULT_ACTION_IDENTIFIER ? 'abrir' : resposta.actionIdentifier;
+    fn(resposta.notification.request.content.data as unknown as DadosNotificacao, acao);
+  };
+
+  const assinatura = N.addNotificationResponseReceivedListener(tratar);
+  const ultima = N.getLastNotificationResponse();
+  if (ultima) tratar(ultima);
+
+  return () => {
+    assinatura.remove();
+    desfazerMemoria();
+  };
+}
+
 export async function agendarNotificacao(pedido: PedidoNotificacao): Promise<string> {
   const N = obterNotificacoes();
   if (!N) return memoria.agendarNotificacao(pedido);
 
-  const dados = pedido.content.data;
-  const categoria =
-    typeof dados === 'object' &&
-    dados !== null &&
-    'tipo' in dados &&
-    dados.tipo === 'dose'
-      ? CATEGORIA_DOSE
-      : undefined;
-
+  const canal = pedido.canal ?? CANAL_DOSES;
   const trigger: import('expo-notifications').NotificationTriggerInput =
     'date' in pedido.trigger
       ? {
           type: N.SchedulableTriggerInputTypes.DATE,
           date: pedido.trigger.date,
-          channelId: CANAL_DOSES,
+          channelId: canal,
         }
       : {
           type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
           seconds: Math.max(1, pedido.trigger.seconds),
-          channelId: CANAL_DOSES,
+          channelId: canal,
         };
 
+  const dados = (pedido.content.data ?? {}) as Record<string, unknown>;
   return N.scheduleNotificationAsync({
     identifier: pedido.identifier,
     content: {
       title: pedido.content.title,
       body: pedido.content.body,
-      data: (pedido.content.data ?? {}) as Record<string, unknown>,
-      ...(categoria ? { categoryIdentifier: categoria } : {}),
-      sound: true,
+      data: dados,
+      sound: canal !== CANAL_DOSES_VISUAL,
+      // Botões Tomei / Adiar / Não tomei só nos lembretes de dose
+      categoryIdentifier: dados.tipo === 'dose' ? CATEGORIA_DOSE : undefined,
     },
     trigger,
   });
