@@ -17,6 +17,6 @@ export async function salvarValor(chave: string, valor: string): Promise<void> {
   try {
     globalThis.localStorage?.setItem(chave, valor);
   } catch {
-    // armazenamento bloqueado: fica só em memória
+    // sem localStorage (modo privado, cota cheia): fica só em memória
   }
 }

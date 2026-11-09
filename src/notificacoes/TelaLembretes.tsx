@@ -29,6 +29,7 @@ import {
 
 interface Props {
   medicamentos?: Medicamento[]; // lista já carregada (GET /medicamentos)
+  onVoltar?: () => void;
 }
 
 const NATIVO = Platform.OS !== 'web';
@@ -43,7 +44,7 @@ const avisar = (titulo: string, mensagem: string): void => {
 };
 
 // Tela de configuração dos lembretes
-export default function TelaLembretes({ medicamentos = [] }: Props) {
+export default function TelaLembretes({ medicamentos = [], onVoltar }: Props) {
 
   const [ativo, setAtivo] = useState<boolean>(true);
   const [permissao, setPermissao] = useState<ResultadoPermissao | null>(null);
@@ -130,6 +131,12 @@ export default function TelaLembretes({ medicamentos = [] }: Props) {
     <ScrollView style={estilo.container} contentContainerStyle={estilo.conteudo}>
 
       <Text style={estilo.titulo}>Lembretes</Text>
+
+      {onVoltar && (
+        <TouchableOpacity style={[estilo.botao, estilo.botaoSecundario]} onPress={onVoltar}>
+          <Text style={[estilo.textoBotao, estilo.textoBotaoSecundario]}>Voltar aos medicamentos</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={estilo.caixa}>
         <Text style={estilo.paragrafo}>
