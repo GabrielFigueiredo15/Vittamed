@@ -4,7 +4,9 @@
     "module": "commonjs",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    "customConditions": ["react-native"],
+    "customConditions": [
+      "react-native"
+    ],
     "allowJs": true,
     "noEmit": true,
     "resolveJsonModule": true,
@@ -24,5 +26,6 @@
   "include": [
     "src",
     "scripts"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }
