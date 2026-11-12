@@ -1,0 +1,9 @@
+[project]
+name = "gate-mobile-vitamed"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.143.0",
+    "firebase-admin>=7.7.0",
+    "pydantic[email]>=2.14.1",
+]

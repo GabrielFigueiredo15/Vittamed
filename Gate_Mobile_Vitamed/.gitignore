@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+.fastapicloud/
+*.pem
+*.key
+*firebase-adminsdk*.json
+serviceAccount*.json
+credentials*.json
