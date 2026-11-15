@@ -491,7 +491,7 @@ export function confirmar(titulo: string, mensagem: string, textoOk = 'Confirmar
 export type Rota =
   | { nome: 'login' }
   | { nome: 'criarConta' }
-  | { nome: 'completarPerfil'; email?: string; senha?: string; editar?: boolean }
+  | { nome: 'completarPerfil'; editar?: boolean }
   | { nome: 'recuperarSenha' }
   | { nome: 'semConexao' }
   | { nome: 'inicio' }

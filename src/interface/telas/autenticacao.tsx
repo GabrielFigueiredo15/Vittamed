@@ -1,5 +1,5 @@
 // Login, criação de conta, perfil, recuperação de senha e tela sem conexão.
-// A conta fica só neste aparelho (protótipo sem servidor).
+// A conta fica na API (CONTRATO.md, seções 1 a 3); a senha não é guardada no aparelho.
 
 import React, { useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
@@ -41,13 +41,17 @@ export function TelaLogin() {
   const [senha, setSenha] = useState('');
   const [lembrar, setLembrar] = useState(true);
   const [erro, setErro] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
-  const aoEntrar = () => {
+  const aoEntrar = async () => {
     if (!EMAIL_VALIDO.test(email.trim())) return setErro('Digite um e-mail válido.');
     if (!senha) return setErro('Digite sua senha.');
-    const resultado = entrar(email, senha, lembrar);
-    if (resultado === 'sem_conta') setErro('Não encontramos uma conta com este e-mail. Toque em "Criar conta".');
-    else if (resultado === 'senha_errada') setErro('Senha incorreta. Tente de novo.');
+    setEnviando(true);
+    const resultado = await entrar(email, senha, lembrar);
+    setEnviando(false);
+    if (!resultado.ok) setErro(resultado.mensagem);
+    else if ('semPerfil' in resultado) nav.ir({ nome: 'completarPerfil' });
+    // ok: o App troca para a tela inicial sozinho
   };
 
   return (
@@ -76,7 +80,7 @@ export function TelaLogin() {
         </Pressable>
       </View>
 
-      <Botao titulo="Entrar" onPress={aoEntrar} />
+      <Botao titulo={enviando ? 'Entrando...' : 'Entrar'} onPress={aoEntrar} desabilitado={enviando} />
       <T v="pequeno" cor="suave" centro style={{ marginVertical: 6 }}>Ainda não tem uma conta?</T>
       <Botao titulo="Criar conta" v="suave" onPress={() => nav.ir({ nome: 'criarConta' })} />
     </Pagina>
@@ -84,23 +88,30 @@ export function TelaLogin() {
 }
 
 export function TelaCriarConta() {
-  const { contaExiste } = useApp();
+  const { criarConta } = useApp();
   const nav = useNav();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmar, setConfirmar] = useState('');
   const [aceito, setAceito] = useState(false);
   const [erros, setErros] = useState<Record<string, string>>({});
+  const [enviando, setEnviando] = useState(false);
 
-  const continuar = () => {
+  const continuar = async () => {
     const e: Record<string, string> = {};
     if (!EMAIL_VALIDO.test(email.trim())) e.email = 'Digite um e-mail válido.';
-    else if (contaExiste(email)) e.email = 'Já existe uma conta com este e-mail neste aparelho.';
     if (senha.length < 8) e.senha = 'Use pelo menos 8 caracteres.';
     if (confirmar !== senha) e.confirmar = 'As senhas não são iguais.';
     if (!aceito) e.termos = 'Aceite os termos para continuar.';
     setErros(e);
-    if (Object.keys(e).length === 0) nav.ir({ nome: 'completarPerfil', email: email.trim(), senha });
+    if (Object.keys(e).length) return;
+
+    // A conta é criada já na etapa 1, para avisar logo se o e-mail já existe
+    setEnviando(true);
+    const resultado = await criarConta(email, senha);
+    setEnviando(false);
+    if (resultado.ok) nav.ir({ nome: 'completarPerfil' });
+    else setErros({ geral: resultado.mensagem });
   };
 
   return (
@@ -120,8 +131,9 @@ export function TelaCriarConta() {
         <T v="pequeno">Li e aceito os <T v="pequeno" cor="primaria" negrito>Termos de uso</T> e a <T v="pequeno" cor="primaria" negrito>Política de privacidade</T>.</T>
       </Caixa>
       {!!erros.termos && <T v="pequeno" cor="perigo" style={{ marginBottom: 12 }}>{erros.termos}</T>}
+      {!!erros.geral && <T v="pequeno" cor="perigo" style={{ marginBottom: 12 }}>{erros.geral}</T>}
 
-      <Botao titulo="Criar conta" onPress={continuar} />
+      <Botao titulo={enviando ? 'Criando conta...' : 'Criar conta'} onPress={continuar} desabilitado={enviando} />
       <T v="pequeno" cor="suave" centro style={{ marginTop: 14 }}>Já tem uma conta?</T>
       <Botao titulo="Entrar" v="link" onPress={nav.voltar} />
     </Pagina>
@@ -130,8 +142,8 @@ export function TelaCriarConta() {
 
 const GENEROS = ['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'];
 
-export function TelaCompletarPerfil({ email, senha, editar }: { email?: string; senha?: string; editar?: boolean }) {
-  const { estado, criarConta, atualizarUsuario } = useApp();
+export function TelaCompletarPerfil({ editar }: { editar?: boolean }) {
+  const { estado, concluirCadastro, atualizarUsuario } = useApp();
   const nav = useNav();
   const u = estado.usuario;
   const [nome, setNome] = useState(editar ? u?.nome ?? '' : '');
@@ -140,6 +152,7 @@ export function TelaCompletarPerfil({ email, senha, editar }: { email?: string; 
   const [genero, setGenero] = useState(editar ? u?.genero ?? '' : '');
   const [foto, setFoto] = useState<string | null>(editar ? u?.foto ?? null : null);
   const [erros, setErros] = useState<Record<string, string>>({});
+  const [enviando, setEnviando] = useState(false);
 
   const chaveNasc = brParaChave(nascimento);
   const idade = chaveNasc ? calcularIdade(chaveNasc) : null;
@@ -155,7 +168,7 @@ export function TelaCompletarPerfil({ email, senha, editar }: { email?: string; 
     }
   };
 
-  const concluir = () => {
+  const concluir = async () => {
     const e: Record<string, string> = {};
     if (nome.trim().length < 2) e.nome = 'Digite seu nome completo.';
     if (celular.replace(/\D/g, '').length < 10) e.celular = 'Digite o celular com DDD.';
@@ -165,13 +178,19 @@ export function TelaCompletarPerfil({ email, senha, editar }: { email?: string; 
     if (Object.keys(e).length) return;
 
     const dados = { nome: nome.trim(), celular, nascimento: chaveNasc as string, genero, foto };
+    setEnviando(true);
+    const resultado = editar ? await atualizarUsuario(dados) : await concluirCadastro(dados);
+    setEnviando(false);
+
+    if (!resultado.ok) {
+      setErros({ geral: resultado.mensagem });
+      return;
+    }
     if (editar) {
-      atualizarUsuario(dados);
       avisar('Pronto', 'Seus dados foram atualizados.');
       nav.voltar();
-    } else {
-      criarConta({ email: email ?? '', senha: senha ?? '', ...dados });
     }
+    // Cadastro concluído: o App troca para a tela inicial sozinho
   };
 
   return (
@@ -204,23 +223,34 @@ export function TelaCompletarPerfil({ email, senha, editar }: { email?: string; 
       {!!erros.genero && <T v="pequeno" cor="perigo">{erros.genero}</T>}
 
       <View style={{ height: 16 }} />
-      <Botao titulo={editar ? 'Salvar alterações' : 'Concluir perfil'} onPress={concluir} />
+      {!!erros.geral && <T v="pequeno" cor="perigo" style={{ marginBottom: 12 }}>{erros.geral}</T>}
+      <Botao
+        titulo={enviando ? 'Salvando...' : editar ? 'Salvar alterações' : 'Concluir perfil'}
+        onPress={concluir}
+        desabilitado={enviando}
+      />
     </Pagina>
   );
 }
 
 export function TelaRecuperarSenha() {
-  const { contaExiste } = useApp();
+  const { recuperarSenha } = useApp();
   const nav = useNav();
   const [email, setEmail] = useState('');
   const [enviado, setEnviado] = useState(false);
   const [erro, setErro] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
-  const enviar = () => {
+  const enviar = async () => {
     if (!EMAIL_VALIDO.test(email.trim())) return setErro('Digite um e-mail válido.');
     if (estaOffline()) return nav.ir({ nome: 'semConexao' });
     setErro('');
-    setEnviado(true);
+    setEnviando(true);
+    const resultado = await recuperarSenha(email);
+    setEnviando(false);
+    if (resultado.ok) setEnviado(true);
+    else if (resultado.semConexao) nav.ir({ nome: 'semConexao' });
+    else setErro(resultado.mensagem);
   };
 
   return (
@@ -229,18 +259,16 @@ export function TelaRecuperarSenha() {
       <T v="titulo" style={{ marginBottom: 4 }}>Recuperar senha</T>
       <T cor="suave" style={{ marginBottom: 20 }}>Informe o e-mail da conta compartilhada para receber um link de recuperação.</T>
       <Campo rotulo="E-mail da conta" valor={email} onChange={(t) => { setEmail(t); setEnviado(false); }} placeholder="seu.email@email.com" teclado="email-address" erro={erro} />
-      <Botao titulo="Enviar link" onPress={enviar} />
+      <Botao titulo={enviando ? 'Enviando...' : 'Enviar link'} onPress={enviar} desabilitado={enviando} />
 
       {enviado && (
         <Cartao>
           <T v="rotulo" style={{ marginBottom: 6 }}>Confirmação após o envio</T>
           <T v="pequeno">
-            {contaExiste(email)
-              ? 'Link enviado. Confira seu e-mail. A nova senha vale para todos que usam esta conta.'
-              : 'Se existir uma conta com este e-mail, o link será enviado. Confira sua caixa de entrada.'}
+            Se existir uma conta com este e-mail, o link foi enviado. Confira sua caixa de entrada e o spam.
           </T>
-          <T v="pequeno" cor="suave" style={{ marginTop: 8 }}>
-            Protótipo: este aplicativo ainda não tem servidor, então nenhum e-mail é enviado de verdade.
+          <T v="pequeno" style={{ marginTop: 8 }}>
+            A nova senha vale para todos que usam esta conta.
           </T>
         </Cartao>
       )}

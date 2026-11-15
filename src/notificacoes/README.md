@@ -45,39 +45,49 @@ await cancelarLembretesMedicamento(med.id);  // depois de excluir
 
 Testes: `npx jest src/notificacoes`
 
-Ao tocar em uma notificação nativa ou em uma de suas ações, o app recebe a resposta por `addNotificationResponseReceivedListener`, inclusive quando foi iniciado a partir do toque. Nesta etapa a resposta é identificada e exibida; os botões ainda não atualizam o status da dose na API. Essa integração está nas tarefas 15–18.
+Ao tocar em uma notificação nativa ou em uma de suas ações, o app recebe a resposta por `addNotificationResponseReceivedListener`, inclusive quando foi iniciado a partir do toque. Os botões Tomei / Adiar / Não tomei registram a dose no aparelho e ela é enviada para a API.
 
-### Estado da integração com a API de doses
+### Integração com a API (remédios, doses e orientações)
 
-O cliente abaixo está implementado e seus testes usam respostas simuladas. **Ele ainda não foi conectado nem validado contra o backend real.** A tarefa 13 cobre somente a implementação isolada do cliente; não significa que a integração com a API esteja concluída.
+Feita em `src/api` (não neste módulo):
 
-Antes de usar em produção, confirme com o backend:
+| Arquivo | O que faz |
+|---|---|
+| `src/api/cliente.ts` | Chamadas HTTP com `Authorization: Bearer`, renovação do token e erros |
+| `src/api/filaSync.ts` | Fila de envio (sobrevive ao fechar o app) e ligação id local ↔ id da API |
+| `src/api/sincronizacao.ts` | Envia a fila (`POST`/`PATCH`/`DELETE` em `/medicamentos`, `/doses` e `/orientacoes`), baixa os três com `GET` e junta com a cópia local |
 
-- a URL base e a forma de obter/renovar o token;
-- os campos aceitos por `POST /doses` e `PATCH /doses/{id}`;
-- se ambos retornam a dose completa em JSON e quais são os formatos de erro;
-- os códigos HTTP e eventuais requisitos adicionais de autenticação.
+- A cópia no aparelho continua sendo a que as telas e os lembretes usam; nada espera a internet.
+- Cada mudança entra na fila e é enviada em ordem quando houver internet e login. Sem conexão, fica guardada.
+- O remédio é enviado antes das doses dele (o `POST /doses` exige que o remédio exista na API).
+- Ao entrar e ao abrir o app, depois de esvaziar a fila, o app baixa o que mudou em outros aparelhos da mesma conta (família/cuidadora, RF03).
+- Foto escolhida no aparelho (data URI) ainda não vai para a API: o contrato só guarda `foto_url` e ainda não há upload. O "início da validade" da orientação também fica só no aparelho (a API só tem `validade`).
 
-Se o backend não retornar uma dose completa em JSON, será necessário ajustar o cliente ao contrato real. As telas e os botões do app ainda não chamam este cliente; isso será feito nas tarefas de fluxo de registro da dose.
+`apiDoses.ts` (cliente isolado da tarefa 13) não é mais usado pelo app e pode ser removido.
 
-O cliente da API recebe URL e token na criação e devolve a dose retornada pelo backend:
+### Aviso à família: token de push (RF09)
 
-```ts
-import { criarClienteDoses } from './src/notificacoes/apiDoses';
+| Arquivo | O que faz |
+|---|---|
+| `push.native.ts` | Pega o token de push do aparelho (Android/iOS); explica o motivo quando não dá (Expo Go, emulador, sem permissão, sem projectId) |
+| `push.ts` | Versão web: sem push remoto |
+| `src/api/aparelho.ts` | Registra o token na conta ao entrar, ao abrir o app e quando o token muda; remove ao sair |
 
-const apiDoses = criarClienteDoses({
-  baseUrl: 'https://api.exemplo.com',
-  token: tokenDeAcesso,
-});
+O endpoint ainda **não existe no backend**. Formato proposto:
 
-const dose = await apiDoses.criarDose({
-  medicamento_id: 'med-123',
-  horario_previsto: new Date().toISOString(),
-});
-await apiDoses.atualizarDose(dose.id, { status: 'tomada' });
-```
+- `PUT /aparelhos` com `{ "token_push": "...", "plataforma": "android" | "ios" }` — guarda (ou move) o token para a conta do Bearer;
+- `DELETE /aparelhos/{token_push}` — ao sair da conta;
+- ao registrar `status=nao_tomada`, o backend envia push pelo serviço do Expo aos **outros** aparelhos da conta, com `channelId: "familia"` e `data: { "tipo": "aviso_familia", "medicamentoId", "horarioPrevisto" }`. Tocar no aviso abre "Avisos do perfil compartilhado".
 
-O cliente espera que os dois endpoints retornem o objeto `Dose` em JSON. A URL e o token devem vir da configuração/autenticação do app; não os grave no código-fonte.
+Enquanto o endpoint não existir, o registro fica pendente e é tentado de novo a cada abertura, sem erro na tela.
+
+**Gerar a development build (Expo Go não recebe push remoto no Android):**
+
+1. Projeto EAS já criado: `@gabrielcatter/vittamed` (`extra.eas.projectId` no `app.json`).
+2. Firebase (o mesmo projeto do backend serve): adicionar um app Android com o pacote `com.vittamed.app`, baixar o `google-services.json` para a raiz e pôr `"googleServicesFile": "./google-services.json"` em `expo.android` no `app.json`.
+3. Enviar a chave do FCM V1 para o EAS: `npx eas-cli credentials` → Android → *Google Service Account Key for Push Notifications (FCM V1)*.
+4. `npx eas-cli build --profile development --platform android` e instalar o APK no celular.
+5. Rodar `npx expo start --dev-client` e abrir pelo app instalado.
 
 ## Microtarefas
 
@@ -100,19 +110,19 @@ Legenda: ✅ feito · ⬜ a fazer
 - ✅ 12. Adicionar o plugin no `app.json` do app principal
 
 **Registro da dose (RF08)**
-- ✅ 13. Cliente isolado para `POST /doses` e `PATCH /doses/{id}` com `Authorization: Bearer` (`apiDoses.ts`; contrato real ainda não validado e ainda não ligado às telas)
+- ✅ 13. Cliente da API com `Authorization: Bearer` e renovação do token (`src/api/cliente.ts`); doses enviadas por `POST /doses` + `PATCH /doses/{id}`
 - ✅ 14. Ouvir o toque/botão da notificação (`addNotificationResponseReceivedListener`)
-- ✅ 15. Botão **Tomei** → registra `status=tomada` (local; o `PATCH` depende da 13)
-- ✅ 16. Botão **Adiar** → registra `status=adiada` + `novo_horario` e agenda novo lembrete (local)
-- ✅ 17. Botão **Não tomei** → registra `status=nao_tomada` (local)
+- ✅ 15. Botão **Tomei** → `status=tomada` no aparelho e na API
+- ✅ 16. Botão **Adiar** → `status=adiada` + `novo_horario` no aparelho e na API, e novo lembrete
+- ✅ 17. Botão **Não tomei** → `status=nao_tomada` no aparelho e na API
 - ✅ 18. Tela de confirmação da dose (aberta ao tocar na notificação) com botões grandes
 
 **Orientações (RF14)**
-- ✅ 19. Lembrete diário às 9h para orientações vencidas e não concluídas (local; falta ligar ao `GET /orientacoes`)
+- ✅ 19. Lembrete diário às 9h para orientações vencidas e não concluídas, com as orientações vindas da API (`/orientacoes`)
 - ✅ 20. Cancelar o lembrete quando a orientação for concluída ou excluída
 
 **Aviso à família (RF09)**
-- ⬜ 21. Registrar token de push do aparelho (exige *development build*; Expo Go não recebe push remoto no Android)
+- ✅ 21. Token de push do aparelho registrado na conta (`push.native.ts`, `src/api/aparelho.ts`); falta o FCM no Android e o endpoint no backend para funcionar de ponta a ponta
 - ⬜ 22. Combinar com o backend um endpoint para guardar tokens e disparar o aviso quando `status=nao_tomada`
 
 **Fechamento**

@@ -13,6 +13,12 @@ jest.mock('./foto', () => ({
 
 import App from '../App';
 import { cancelarTodas, dispararToque, listarAgendadas } from '../notificacoes/notificador';
+import { criarApiFalsa, type ApiFalsa } from '../api/apiFalsa';
+import { definirFetch } from '../api/cliente';
+import { limparSessao, sessaoAtual } from '../api/sessao';
+
+// O app fala com a API; nos testes ela é simulada em memória
+let api: ApiFalsa;
 
 const HOJE_10H = new Date(2026, 9, 12, 10, 0); // segunda, 12/10/2026 10:00
 
@@ -42,6 +48,9 @@ beforeEach(() => {
   window.alert = jest.fn();
   window.confirm = jest.fn(() => true);
   cancelarTodas();
+  api = criarApiFalsa();
+  definirFetch(api.fetch);
+  return limparSessao();
 });
 
 afterEach(() => {
@@ -294,11 +303,412 @@ test('sair da conta volta ao login e a senha errada é recusada', async () => {
   clicar('Sair da conta');
   await veTexto('Bem-vindo de volta!');
 
+  expect(sessaoAtual()).toBeNull(); // tokens descartados
+
   digitar('E-mail', 'joao@email.com');
   digitar('Senha', 'errada123');
   clicar('Entrar');
-  await veTexto('Senha incorreta. Tente de novo.');
+  await veTexto('E-mail ou senha incorretos.');
   digitar('Senha', 'senha1234');
   clicar('Entrar');
   await veTexto(/Hoje, 12 de outubro/);
+});
+
+// ---------- Login pela API ----------
+
+async function entrarCom(email: string, senha: string, lembrar = true) {
+  render(<App />);
+  await veTexto('Bem-vindo de volta!');
+  digitar('E-mail', email);
+  digitar('Senha', senha);
+  if (!lembrar) fireEvent.click(screen.getByRole('checkbox'));
+  clicar('Entrar');
+}
+
+test('cadastro cria a conta e o perfil na API, sem guardar a senha no aparelho', async () => {
+  await criarContaEEntrar();
+
+  const uid = api.contas.get('joao@email.com')!.uid;
+  expect(api.perfis.get(uid)).toMatchObject({
+    nome: 'João Silva',
+    telefone: '(11) 99999-1234',
+    data_nascimento: '1954-03-05',
+    email: 'joao@email.com',
+  });
+  expect(estadoSalvo().uid).toBe(uid);
+  expect(estadoSalvo().usuario.senha).toBeUndefined();
+  expect(window.localStorage.getItem('@vittamed_sessao_api')).not.toContain('senha1234');
+});
+
+test('entra num aparelho novo e traz o perfil da API', async () => {
+  api.criarConta('maria@ex.com', 'Senha12345', { nome: 'Maria Souza', telefone: '(21) 98888-7777' });
+  await entrarCom('maria@ex.com', 'Senha12345');
+  await veTexto(/Hoje, 12 de outubro/);
+  expect(screen.getByText('Maria')).toBeTruthy();
+  expect(estadoSalvo().usuario).toMatchObject({ nome: 'Maria Souza', celular: '(21) 98888-7777' });
+});
+
+test('e-mail já cadastrado avisa na etapa 1 do cadastro', async () => {
+  api.criarConta('joao@email.com', 'outraSenha1');
+  render(<App />);
+  await veTexto('Bem-vindo de volta!');
+  clicar('Criar conta');
+  digitar('E-mail', 'joao@email.com');
+  digitar('Criar senha', 'senha1234');
+  digitar('Confirmar senha', 'senha1234');
+  fireEvent.click(screen.getByRole('checkbox'));
+  clicar('Criar conta');
+  await veTexto('Já existe uma conta com este e-mail. Toque em "Entrar".');
+  expect(screen.queryByText('Completar perfil')).toBeNull();
+});
+
+test('conta sem perfil vai para "Completar perfil" depois do login', async () => {
+  api.criarConta('sem@perfil.com', 'Senha12345');
+  await entrarCom('sem@perfil.com', 'Senha12345');
+  await veTexto('Completar perfil');
+
+  digitar('Nome completo', 'Ana Lima');
+  digitar('Número de celular', '11988887777');
+  digitar('Data de nascimento', '10101950');
+  clicar('Feminino');
+  clicar('Concluir perfil');
+  await veTexto(/Hoje, 12 de outubro/);
+  expect(api.perfis.get(api.contas.get('sem@perfil.com')!.uid)).toMatchObject({ nome: 'Ana Lima' });
+});
+
+test('sem internet o login mostra um aviso claro', async () => {
+  api.criarConta('maria@ex.com', 'Senha12345', { nome: 'Maria' });
+  api.offline = true;
+  await entrarCom('maria@ex.com', 'Senha12345');
+  await veTexto(/Sem conexão com a internet/);
+});
+
+test('com "Lembrar de mim" o app abre já logado; sem ele, volta ao login', async () => {
+  await criarContaEEntrar();
+  cleanup();
+  render(<App />);
+  await veTexto(/Hoje, 12 de outubro/);
+
+  aba('Perfil');
+  await veTexto('Meu perfil');
+  clicar('Sair da conta');
+  await veTexto('Bem-vindo de volta!');
+  cleanup();
+
+  await entrarCom('joao@email.com', 'senha1234', false);
+  await veTexto(/Hoje, 12 de outubro/);
+  cleanup();
+  render(<App />);
+  await veTexto('Bem-vindo de volta!');
+  expect(sessaoAtual()).toBeNull();
+});
+
+test('outra conta no mesmo aparelho não vê os remédios da anterior', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '20:00');
+  aba('Perfil');
+  await veTexto('Meu perfil');
+  clicar('Sair da conta');
+  await veTexto('Bem-vindo de volta!');
+  cleanup();
+
+  api.criarConta('maria@ex.com', 'Senha12345', { nome: 'Maria' });
+  await entrarCom('maria@ex.com', 'Senha12345');
+  await veTexto(/Hoje, 12 de outubro/);
+  expect(estadoSalvo().medicamentos).toEqual([]);
+});
+
+test('a mesma conta, ao entrar de novo, mantém os remédios locais', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '20:00');
+  aba('Perfil');
+  await veTexto('Meu perfil');
+  clicar('Sair da conta');
+  await veTexto('Bem-vindo de volta!');
+
+  digitar('E-mail', 'joao@email.com');
+  digitar('Senha', 'senha1234');
+  clicar('Entrar');
+  await veTexto(/Hoje, 12 de outubro/);
+  expect(estadoSalvo().medicamentos.map((m: { nome: string }) => m.nome)).toEqual(['Losartana']);
+});
+
+test('estado antigo do protótipo (com senha salva) pede login e descarta a senha', async () => {
+  window.localStorage.setItem('@vittamed_estado', JSON.stringify({
+    usuario: { email: 'joao@email.com', senha: 'senha1234', nome: 'João', celular: '', nascimento: '', genero: '' },
+    sessao: true,
+    lembrar: true,
+  }));
+  render(<App />);
+  await veTexto('Bem-vindo de volta!');
+  await waitFor(() => expect(estadoSalvo().usuario.senha).toBeUndefined());
+});
+
+test('sessão expirada na API volta para o login', async () => {
+  await criarContaEEntrar();
+  api.invalidarTokens();
+  api.invalidarRefresh();
+
+  aba('Perfil');
+  await veTexto('Meu perfil');
+  clicar('Minha conta');
+  await veTexto('Minha conta');
+  digitar('Nome completo', 'João S. Silva');
+  clicar('Salvar alterações');
+  await veTexto('Bem-vindo de volta!');
+});
+
+test('editar o perfil atualiza a API', async () => {
+  await criarContaEEntrar();
+  aba('Perfil');
+  await veTexto('Meu perfil');
+  clicar('Minha conta');
+  await veTexto('Minha conta');
+  digitar('Nome completo', 'João S. Silva');
+  clicar('Salvar alterações');
+  await veTexto('Meu perfil');
+  expect(api.perfis.get(api.contas.get('joao@email.com')!.uid)).toMatchObject({ nome: 'João S. Silva' });
+});
+
+// ---------- Remédios e doses na API ----------
+
+const uidDe = (email: string) => api.contas.get(email)!.uid;
+const medsNaApi = () => [...api.colecao(uidDe('joao@email.com'), 'medicamentos').values()];
+const dosesNaApi = () => [...api.colecao(uidDe('joao@email.com'), 'doses').values()];
+const filaSalva = () => JSON.parse(window.localStorage.getItem('@vittamed_sync_api') ?? '{"fila":[]}').fila;
+
+test('cadastrar remédio e responder a notificação enviam para a API', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  await waitFor(() => expect(medsNaApi()).toHaveLength(1));
+  expect(medsNaApi()[0]).toMatchObject({
+    nome: 'Losartana',
+    dosagem: '50 mg',
+    agendamento: { tipo: 'fixo', horarios: ['12:00'] },
+  });
+
+  const medId = estadoSalvo().medicamentos[0].id as string;
+  const horario = new Date(2026, 9, 12, 12, 0).toISOString();
+  act(() => dispararToque({ tipo: 'dose', medicamentoId: medId, horarioPrevisto: horario }, 'nao_tomei'));
+
+  await waitFor(() => expect(dosesNaApi()).toHaveLength(1));
+  expect(dosesNaApi()[0]).toMatchObject({
+    medicamento_id: medsNaApi()[0].id,
+    horario_previsto: horario,
+    status: 'nao_tomada',
+  });
+  await waitFor(() => expect(dosesNaApi()[0].horario_registrado).toBeTruthy());
+});
+
+test('outro aparelho da mesma conta vê os remédios e as doses', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  const medId = estadoSalvo().medicamentos[0].id as string;
+  const horario = new Date(2026, 9, 12, 12, 0).toISOString();
+  act(() => dispararToque({ tipo: 'dose', medicamentoId: medId, horarioPrevisto: horario }, 'tomei'));
+  await waitFor(() => expect(dosesNaApi()[0]?.status).toBe('tomada'));
+
+  // Outro celular: nada salvo localmente
+  cleanup();
+  window.localStorage.clear();
+  await limparSessao();
+  cancelarTodas();
+
+  await entrarCom('joao@email.com', 'senha1234');
+  await veTexto(/Hoje, 12 de outubro/);
+  await waitFor(() => expect(estadoSalvo().medicamentos.map((m: { nome: string }) => m.nome)).toEqual(['Losartana']));
+  await waitFor(() => expect(estadoSalvo().registros).toHaveLength(1));
+  expect(estadoSalvo().registros[0]).toMatchObject({ status: 'tomada', horario_previsto: horario });
+  // A dose já tomada não deve tocar neste aparelho
+  await waitFor(() => expect(idsAgendados('dose_').length).toBe(2));
+});
+
+test('sem internet o cadastro fica na fila e é enviado quando o app abre de novo', async () => {
+  await criarContaEEntrar();
+  api.offline = true;
+  await cadastrarMedicamento('Losartana', '12:00');
+  await waitFor(() => expect(filaSalva()).toHaveLength(1));
+  expect(medsNaApi()).toHaveLength(0);
+
+  api.offline = false;
+  cleanup();
+  render(<App />);
+  await veTexto(/Hoje, 12 de outubro/);
+  await waitFor(() => expect(medsNaApi()).toHaveLength(1));
+  await waitFor(() => expect(filaSalva()).toHaveLength(0));
+});
+
+test('excluir o remédio apaga na API', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  await waitFor(() => expect(medsNaApi()).toHaveLength(1));
+
+  clicar('Excluir');
+  const aviso = await screen.findByRole('alert');
+  fireEvent.click(within(aviso).getByRole('button', { name: 'Excluir medicamento' }));
+  await waitFor(() => expect(medsNaApi()).toHaveLength(0));
+});
+
+test('remédio excluído em outro aparelho some daqui ao abrir o app', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  await waitFor(() => expect(medsNaApi()).toHaveLength(1));
+
+  api.colecao(uidDe('joao@email.com'), 'medicamentos').clear();
+  cleanup();
+  render(<App />);
+  await veTexto(/Hoje, 12 de outubro/);
+  await waitFor(() => expect(estadoSalvo().medicamentos).toEqual([]));
+  await waitFor(() => expect(idsAgendados('dose_').length).toBe(0));
+});
+
+test('dados do protótipo (sem API) são enviados no primeiro login', async () => {
+  api.criarConta('joao@email.com', 'senha1234', { nome: 'João Silva' });
+  window.localStorage.setItem('@vittamed_estado', JSON.stringify({
+    usuario: { email: 'joao@email.com', nome: 'João Silva', celular: '', nascimento: '', genero: '' },
+    sessao: false,
+    lembrar: true,
+    medicamentos: [{
+      id: 'm_antigo', nome: 'Metformina', ativo: true,
+      agendamento: { tipo: 'fixo', horarios: ['08:00'] }, criado_em: '2026-10-01T10:00:00.000Z',
+    }],
+    registros: [],
+    orientacoes: [],
+  }));
+
+  await entrarCom('joao@email.com', 'senha1234');
+  await veTexto(/Hoje, 12 de outubro/);
+  await waitFor(() => expect(medsNaApi().map((m) => m.nome)).toEqual(['Metformina']));
+  // Continua com o id local (notificações e registros dependem dele)
+  expect(estadoSalvo().medicamentos.map((m: { id: string }) => m.id)).toEqual(['m_antigo']);
+});
+
+test('adiar e depois tomar atualiza a mesma dose na API', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  const medId = estadoSalvo().medicamentos[0].id as string;
+  const horario = new Date(2026, 9, 12, 12, 0).toISOString();
+
+  act(() => dispararToque({ tipo: 'dose', medicamentoId: medId, horarioPrevisto: horario }, 'adiar'));
+  await waitFor(() => expect(dosesNaApi()[0]?.status).toBe('adiada'));
+  expect(dosesNaApi()[0].novo_horario).toBeTruthy();
+
+  act(() => dispararToque({ tipo: 'dose', medicamentoId: medId, horarioPrevisto: horario }, 'tomei'));
+  await waitFor(() => expect(dosesNaApi()[0]?.status).toBe('tomada'));
+  expect(dosesNaApi()).toHaveLength(1);
+});
+
+// ---------- Orientações na API (RF12, RF14) ----------
+
+const orientacoesNaApi = () => [...api.colecao(uidDe('joao@email.com'), 'orientacoes').values()];
+
+async function criarOrientacaoVencida() {
+  clicar('Detalhes');
+  await veTexto('Detalhes do remédio');
+  clicar('Orientações de uso');
+  await veTexto('Associadas a Losartana 50 mg');
+  clicar('Adicionar orientação');
+  await veTexto('Dados da orientação');
+  digitar('Texto da orientação', 'Conferir a receita com o farmacêutico');
+  digitar('Início da validade', '01/09/2026');
+  digitar('Fim da validade', '01/10/2026');
+  clicar('Salvar orientação / alterações');
+  await veTexto('Revisão pendente · Continua ativa');
+}
+
+test('orientação criada e concluída vai para a API', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  await criarOrientacaoVencida();
+
+  await waitFor(() => expect(orientacoesNaApi()).toHaveLength(1));
+  expect(orientacoesNaApi()[0]).toMatchObject({
+    medicamento_id: medsNaApi()[0].id,
+    texto: 'Conferir a receita com o farmacêutico',
+    validade: '2026-10-01',
+    concluida: false,
+  });
+
+  clicar('Visualizar');
+  await veTexto('Visualizando a orientação.');
+  clicar('Concluir orientação');
+  await waitFor(() => expect(orientacoesNaApi()[0].concluida).toBe(true));
+  await waitFor(() => expect(idsAgendados('orientacao_').length).toBe(0));
+});
+
+test('outro aparelho recebe a orientação vencida e o lembrete diário dela', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  await criarOrientacaoVencida();
+  await waitFor(() => expect(orientacoesNaApi()).toHaveLength(1));
+
+  cleanup();
+  window.localStorage.clear();
+  await limparSessao();
+  cancelarTodas();
+
+  await entrarCom('joao@email.com', 'senha1234');
+  await veTexto(/Hoje, 12 de outubro/);
+  await waitFor(() => expect(estadoSalvo().orientacoes).toHaveLength(1));
+  expect(estadoSalvo().orientacoes[0]).toMatchObject({
+    texto: 'Conferir a receita com o farmacêutico',
+    medicamento_id: estadoSalvo().medicamentos[0].id,
+  });
+  await waitFor(() => expect(idsAgendados('orientacao_').length).toBeGreaterThan(0));
+});
+
+test('excluir o remédio apaga as orientações dele na API', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  await criarOrientacaoVencida();
+  await waitFor(() => expect(orientacoesNaApi()).toHaveLength(1));
+
+  aba('Remédios');
+  await veTexto('Meus remédios');
+  clicar('Excluir');
+  const aviso = await screen.findByRole('alert');
+  fireEvent.click(within(aviso).getByRole('button', { name: 'Excluir medicamento' }));
+  await waitFor(() => expect(medsNaApi()).toHaveLength(0));
+  expect(orientacoesNaApi()).toHaveLength(0);
+});
+
+// ---------- Aviso à família: token de push (RF09) ----------
+
+// Na web não há push; aqui o token do aparelho é simulado quando o teste define
+jest.mock('../notificacoes/push', () => ({
+  obterTokenPush: async () =>
+    (globalThis as { __tokenPushTeste?: unknown }).__tokenPushTeste ?? { ok: false, motivo: 'sem_suporte' },
+  ouvirTrocaToken: () => () => {},
+}));
+const definirTokenPush = (valor: unknown) => {
+  (globalThis as { __tokenPushTeste?: unknown }).__tokenPushTeste = valor;
+};
+afterEach(() => definirTokenPush(undefined));
+
+test('entrar registra o aparelho na conta e sair remove', async () => {
+  definirTokenPush({ ok: true, token: 'ExponentPushToken[celular-joao]', plataforma: 'android' });
+  await criarContaEEntrar();
+  await waitFor(() => expect(api.aparelhos.get('ExponentPushToken[celular-joao]')?.uid).toBe(uidDe('joao@email.com')));
+
+  aba('Perfil');
+  await veTexto('Meu perfil');
+  clicar('Sair da conta');
+  await veTexto('Bem-vindo de volta!');
+  await waitFor(() => expect(api.aparelhos.size).toBe(0));
+  await waitFor(() => expect(sessaoAtual()).toBeNull());
+});
+
+test('sem o endpoint no backend o app funciona normalmente', async () => {
+  api.comAparelhos = false;
+  definirTokenPush({ ok: true, token: 'ExponentPushToken[x]', plataforma: 'android' });
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  await waitFor(() => expect(medsNaApi()).toHaveLength(1));
+  expect(api.chamadas.some((c) => c.caminho === '/aparelhos')).toBe(true);
+});
+
+test('tocar no aviso de dose não tomada abre os avisos do perfil', async () => {
+  await criarContaEEntrar();
+  act(() => dispararToque({ tipo: 'aviso_familia' }));
+  await veTexto('Avisos do perfil compartilhado');
 });

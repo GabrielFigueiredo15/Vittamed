@@ -45,7 +45,9 @@ export interface Orientacao {
 // Dados anexados a cada notificação, usados ao tocar nela
 export type DadosNotificacao =
   | { tipo: 'dose'; medicamentoId: string; horarioPrevisto: string; doseId?: string }
-  | { tipo: 'orientacao'; orientacaoId: string; medicamentoId: string };
+  | { tipo: 'orientacao'; orientacaoId: string; medicamentoId: string }
+  // Push enviado pelo backend aos outros aparelhos da conta (RF09)
+  | { tipo: 'aviso_familia'; medicamentoId?: string; horarioPrevisto?: string };
 
 export interface ConteudoNotificacao {
   titulo: string;
