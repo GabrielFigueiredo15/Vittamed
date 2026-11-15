@@ -34,42 +34,64 @@ obterNotificacoes()?.setNotificationHandler({
   }),
 });
 
+type Notificacoes = NonNullable<ReturnType<typeof obterNotificacoes>>;
+type OpcoesCanal = Parameters<Notificacoes['setNotificationChannelAsync']>[1];
+
+// Cria um canal sem deixar a falha de um derrubar os outros. Se a opção
+// principal for recusada, tenta a alternativa: o Expo Go no Android dá
+// NullPointerException com "sound: null" (o jeito oficial de tirar o som),
+// então o canal sem som cai para importância baixa, que também não toca som.
+async function criarCanal(N: Notificacoes, id: string, opcoes: OpcoesCanal, alternativa?: OpcoesCanal): Promise<void> {
+  try {
+    await N.setNotificationChannelAsync(id, opcoes);
+    return;
+  } catch (erro) {
+    if (!alternativa) {
+      console.log(`Canal "${id}" não foi criado:`, erro);
+      return;
+    }
+  }
+  try {
+    await N.setNotificationChannelAsync(id, alternativa);
+  } catch (erro) {
+    console.log(`Canal "${id}" não foi criado:`, erro);
+  }
+}
+
 // No Android 8+ toda notificação precisa de um canal; no 13+ o canal
 // deve existir antes de pedir a permissão.
 async function criarCanais(): Promise<void> {
   const N = obterNotificacoes();
   if (!N || Platform.OS !== 'android') return;
   const publico = N.AndroidNotificationVisibility.PUBLIC;
-  await N.setNotificationChannelAsync(CANAL_DOSES, {
+  await criarCanal(N, CANAL_DOSES, {
     name: 'Lembretes de doses',
     importance: N.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
     lockscreenVisibility: publico,
   });
   // Um canal por formato escolhido em "Acessibilidade e lembretes"
-  await N.setNotificationChannelAsync(CANAL_DOSES_VISUAL, {
-    name: 'Lembretes só visuais',
-    importance: N.AndroidImportance.HIGH,
-    sound: null,
-    enableVibrate: false,
-    lockscreenVisibility: publico,
-  });
-  await N.setNotificationChannelAsync(CANAL_DOSES_SOM, {
+  await criarCanal(
+    N,
+    CANAL_DOSES_VISUAL,
+    { name: 'Lembretes só visuais', importance: N.AndroidImportance.HIGH, sound: null, enableVibrate: false, lockscreenVisibility: publico },
+    { name: 'Lembretes só visuais', importance: N.AndroidImportance.LOW, enableVibrate: false, lockscreenVisibility: publico }
+  );
+  await criarCanal(N, CANAL_DOSES_SOM, {
     name: 'Lembretes com som',
     importance: N.AndroidImportance.HIGH,
     sound: 'default',
     enableVibrate: false,
     lockscreenVisibility: publico,
   });
-  await N.setNotificationChannelAsync(CANAL_DOSES_VIBRACAO, {
-    name: 'Lembretes com vibração',
-    importance: N.AndroidImportance.HIGH,
-    sound: null,
-    vibrationPattern: [0, 400, 200, 400],
-    lockscreenVisibility: publico,
-  });
+  await criarCanal(
+    N,
+    CANAL_DOSES_VIBRACAO,
+    { name: 'Lembretes com vibração', importance: N.AndroidImportance.HIGH, sound: null, vibrationPattern: [0, 400, 200, 400], lockscreenVisibility: publico },
+    { name: 'Lembretes com vibração', importance: N.AndroidImportance.LOW, enableVibrate: true, vibrationPattern: [0, 400, 200, 400], lockscreenVisibility: publico }
+  );
   // Push do backend para a família quando uma dose não é tomada (RF09)
-  await N.setNotificationChannelAsync(CANAL_FAMILIA, {
+  await criarCanal(N, CANAL_FAMILIA, {
     name: 'Avisos para a família',
     importance: N.AndroidImportance.HIGH,
     sound: 'default',
@@ -84,11 +106,16 @@ async function registrarBotoes(): Promise<void> {
   if (!N) return;
   // Abrem o app para o registro da dose ser gravado e sincronizado
   const opcoes = { opensAppToForeground: true };
-  await N.setNotificationCategoryAsync(CATEGORIA_DOSE, [
-    { identifier: ACAO_TOMEI, buttonTitle: 'Tomei', options: opcoes },
-    { identifier: ACAO_ADIAR, buttonTitle: 'Adiar', options: opcoes },
-    { identifier: ACAO_NAO_TOMEI, buttonTitle: 'Não tomei', options: opcoes },
-  ]);
+  try {
+    await N.setNotificationCategoryAsync(CATEGORIA_DOSE, [
+      { identifier: ACAO_TOMEI, buttonTitle: 'Tomei', options: opcoes },
+      { identifier: ACAO_ADIAR, buttonTitle: 'Adiar', options: opcoes },
+      { identifier: ACAO_NAO_TOMEI, buttonTitle: 'Não tomei', options: opcoes },
+    ]);
+  } catch (erro) {
+    // Sem os botões, tocar na notificação ainda abre a tela da dose
+    console.log('Botões da notificação não foram registrados:', erro);
+  }
 }
 
 export async function pedirPermissao(): Promise<ResultadoPermissao> {
