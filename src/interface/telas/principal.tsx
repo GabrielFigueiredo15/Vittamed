@@ -1,9 +1,10 @@
 // Início, calendário mensal, histórico diário, assistente e avisos do perfil compartilhado.
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { formatarHora } from '../../notificacoes/textos';
-import { AVISO_ASSISTENTE, responderAssistente } from '../assistente';
+import { mensagemErroIA, perguntarIA, type MensagemChat } from '../../api/chat';
+import { AVISO_ASSISTENTE, contextoRemedios, remedioCitado, respostaLocal } from '../assistente';
 import {
   DIAS_CURTOS,
   chaveData,
@@ -317,7 +318,8 @@ export function TelaHistorico({ dia }: { dia?: string }) {
 
 // ---------- Assistente de IA ----------
 
-interface Mensagem { de: 'eu' | 'ia'; texto: string }
+// fora = não entra no histórico enviado à IA (pergunta que falhou e aviso de erro)
+interface Mensagem { de: 'eu' | 'ia'; texto: string; fora?: boolean }
 
 export function TelaAssistente() {
   const { estado } = useApp();
@@ -326,13 +328,45 @@ export function TelaAssistente() {
   const n = estado.medicamentos.length;
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [texto, setTexto] = useState('');
+  const [pensando, setPensando] = useState(false);
+  const montada = useRef(true);
+  useEffect(() => () => { montada.current = false; }, []);
 
-  const enviar = () => {
+  const enviar = async () => {
     const pergunta = texto.trim();
-    if (!pergunta) return;
-    const resposta = responderAssistente(pergunta, estado.medicamentos, estado.registros);
-    setMensagens((m) => [...m, { de: 'eu', texto: pergunta }, { de: 'ia', texto: resposta }]);
+    if (!pergunta || pensando) return;
     setTexto('');
+
+    // Dúvida clínica e perguntas sobre os dados cadastrados: responde no aparelho
+    const local = respostaLocal(pergunta, estado.medicamentos, estado.registros);
+    if (local) {
+      setMensagens((m) => [...m, { de: 'eu', texto: pergunta }, { de: 'ia', texto: local }]);
+      return;
+    }
+
+    const historico: MensagemChat[] = mensagens
+      .filter((m) => !m.fora)
+      .map((m) => ({ role: m.de === 'eu' ? 'user' : 'assistant', content: m.texto }));
+    setMensagens((m) => [...m, { de: 'eu', texto: pergunta }]);
+    setPensando(true);
+    try {
+      const resposta = await perguntarIA(
+        historico,
+        pergunta,
+        contextoRemedios(estado.medicamentos),
+        remedioCitado(pergunta, estado.medicamentos)
+      );
+      if (montada.current) setMensagens((m) => [...m, { de: 'ia', texto: resposta }]);
+    } catch (erro) {
+      if (!montada.current) return;
+      setMensagens((m) => [
+        ...m.slice(0, -1),
+        { de: 'eu', texto: pergunta, fora: true },
+        { de: 'ia', texto: mensagemErroIA(erro), fora: true },
+      ]);
+    } finally {
+      if (montada.current) setPensando(false);
+    }
   };
 
   return (
@@ -357,6 +391,15 @@ export function TelaAssistente() {
         </View>
       ))}
 
+      {pensando && (
+        <View accessibilityLiveRegion="polite" style={{ alignSelf: 'flex-start', marginBottom: 10 }}>
+          <T v="pequeno" cor="primaria" negrito>Assistente de IA</T>
+          <View style={{ backgroundColor: c.superficie, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: c.borda }}>
+            <T cor="suave">Pensando…</T>
+          </View>
+        </View>
+      )}
+
       <Cartao>
         <T v="pequeno" negrito>{AVISO_ASSISTENTE}</T>
         <T v="pequeno" cor="suave" style={{ marginTop: 4 }}>
@@ -374,7 +417,7 @@ export function TelaAssistente() {
           placeholderTextColor={c.suave}
           style={{ flex: 1, backgroundColor: c.campo, borderRadius: 10, borderWidth: 1, borderColor: c.borda, color: c.texto, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 * escala }}
         />
-        <Botao titulo="Enviar" onPress={enviar} style={{ marginBottom: 0 }} />
+        <Botao titulo="Enviar" onPress={enviar} desabilitado={pensando || !texto.trim()} style={{ marginBottom: 0 }} />
       </View>
     </Pagina>
   );

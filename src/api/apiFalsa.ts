@@ -21,6 +21,8 @@ export interface ApiFalsa {
   // Endpoint proposto /aparelhos (RF09). false = backend ainda sem ele (404)
   comAparelhos: boolean;
   aparelhos: Map<string, { uid: string; plataforma: string }>; // token -> dono
+  // POST /chat: texto devolvido pela IA; null = provedor de IA fora do ar (502)
+  respostaChat: string | null;
   invalidarTokens(): void;                          // id_tokens atuais passam a dar 401
   invalidarRefresh(): void;                         // refresh_tokens atuais passam a dar 401
   criarConta(email: string, senha: string, perfil?: Record<string, unknown>): string;
@@ -68,6 +70,7 @@ export function criarApiFalsa(): ApiFalsa {
     pausado: false,
     comAparelhos: true,
     aparelhos: new Map(),
+    respostaChat: 'Resposta da IA.',
     colecao: (uid, nome) => {
       const chave = `${uid}/${nome}`;
       if (!colecoes.has(chave)) colecoes.set(chave, new Map());
@@ -128,6 +131,14 @@ export function criarApiFalsa(): ApiFalsa {
         const perfil = { ...corpo, uid, atualizado_em: new Date().toISOString() };
         perfis.set(uid, perfil);
         return resposta(200, perfil);
+      }
+
+      if (caminho === '/chat' && metodo === 'POST') {
+        if (!corpo?.mensagem && !corpo?.mensagens?.length) {
+          return resposta(422, { detail: "informe 'mensagem' ou 'mensagens'" });
+        }
+        if (api.respostaChat === null) return resposta(502, { detail: 'falha no provedor de IA' });
+        return resposta(200, { resposta: api.respostaChat, modelo: 'falso' });
       }
 
       // ---- proposto: /aparelhos (token de push, RF09) ----

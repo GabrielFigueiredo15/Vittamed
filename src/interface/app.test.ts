@@ -1,6 +1,6 @@
 // Testes das funções puras do app: datas, doses do dia e assistente.
 import type { Medicamento } from '../notificacoes/tipos';
-import { responderAssistente } from './assistente';
+import { contextoRemedios, ehPerguntaClinica, remedioCitado, responderAssistente, respostaLocal } from './assistente';
 import {
   brParaChave,
   calcularIdade,
@@ -92,4 +92,42 @@ test('assistente lista remédios, informa a próxima dose e recusa dúvida clín
   expect(responderAssistente('Quais remédios tenho cadastrados?', meds, [], AGORA)).toContain('Losartana 50 mg');
   expect(responderAssistente('Qual é a próxima dose?', meds, [], AGORA)).toContain('12:00');
   expect(responderAssistente('Posso tomar com álcool?', meds, [], AGORA)).toContain('médico ou farmacêutico');
+});
+
+test('dúvidas clínicas são recusadas no aparelho (RF16)', () => {
+  for (const p of [
+    'Posso tomar com álcool?',
+    'Esqueci a dose, tomo dobrado?',
+    'Tem interação com dipirona?',
+    'Quais os efeitos colaterais?',
+    'Posso parar de tomar a losartana?',
+    'Quero mudar a dose',
+  ]) {
+    expect(ehPerguntaClinica(p)).toBe(true);
+  }
+  expect(ehPerguntaClinica('Para que serve a losartana?')).toBe(false);
+  expect(ehPerguntaClinica('Quando devo tomar a losartana?')).toBe(false);
+});
+
+test('perguntas gerais vão para a IA; perguntas sobre os dados ficam no aparelho', () => {
+  const meds = [med('a', 'Losartana', ['12:00'])];
+  expect(respostaLocal('Para que serve a losartana?', meds, [], AGORA)).toBeNull();
+  expect(respostaLocal('Quais são as doses de hoje?', meds, [], AGORA)).toContain('12:00 — Losartana 50 mg');
+  expect(respostaLocal('Quais são meus horários?', meds, [], AGORA)).toContain('Losartana 50 mg: 12:00');
+});
+
+test('remédio citado e contexto para a IA', () => {
+  const meds = [
+    med('a', 'Losartana', ['12:00']),
+    med('b', 'Losartana Potássica', ['20:00']),
+    med('c', 'Vitamina D', ['08:00'], { observacoes: 'Depois do café', periodo_fim: '2026-10-01' }),
+  ];
+  expect(remedioCitado('Para que serve a losartana potássica?', meds)).toBe('Losartana Potássica');
+  expect(remedioCitado('E a vitamina d?', meds)).toBe('Vitamina D');
+  expect(remedioCitado('Bom dia', meds)).toBeUndefined();
+
+  const ctx = contextoRemedios(meds, AGORA);
+  expect(ctx).toContain('- Losartana 50 mg; horários: 12:00; dias: Todos os dias');
+  expect(ctx).toContain('observações: Depois do café; tratamento encerrado');
+  expect(contextoRemedios([], AGORA)).toMatch(/ainda não cadastrou/);
 });

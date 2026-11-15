@@ -250,6 +250,59 @@ test('assistente responde com os remédios cadastrados e recusa dúvida clínica
   digitar('Digite sua dúvida', 'Posso tomar com álcool?');
   clicar('Enviar');
   await veTexto(/Para dúvidas sobre dose, interações/);
+
+  // Respondidas no aparelho: nada vai para a IA
+  expect(api.chamadas.some((c) => c.caminho === '/chat')).toBe(false);
+});
+
+test('assistente manda perguntas gerais para a IA com os remédios cadastrados', async () => {
+  await criarContaEEntrar();
+  await cadastrarMedicamento('Losartana', '12:00');
+  aba('Início');
+  clicar('Abrir assistente de IA');
+  await veTexto('Assistente de IA');
+
+  api.respostaChat = 'A losartana é usada para controlar a pressão alta.';
+  digitar('Digite sua dúvida', 'Para que serve a losartana?');
+  clicar('Enviar');
+  await veTexto('A losartana é usada para controlar a pressão alta.');
+
+  const chamada = api.chamadas.find((c) => c.caminho === '/chat')!;
+  const corpo = chamada.corpo as { remedio: string; mensagens: { role: string; content: string }[] };
+  expect(corpo.remedio).toBe('Losartana');
+  expect(corpo.mensagens[corpo.mensagens.length - 1].content).toMatch(/Losartana.*\n\nPergunta: Para que serve a losartana\?/s);
+
+  // A segunda pergunta leva a conversa anterior
+  api.respostaChat = 'Guarde em local seco, longe do calor.';
+  digitar('Digite sua dúvida', 'E como guardar?');
+  clicar('Enviar');
+  await veTexto('Guarde em local seco, longe do calor.');
+  const ultima = api.chamadas.filter((c) => c.caminho === '/chat').pop()!;
+  const msgs = (ultima.corpo as { mensagens: { role: string; content: string }[] }).mensagens;
+  expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+  expect(msgs[1].content).toBe('A losartana é usada para controlar a pressão alta.');
+});
+
+test('assistente avisa quando a IA está fora do ar ou sem internet', async () => {
+  await criarContaEEntrar();
+  aba('Início');
+  clicar('Abrir assistente de IA');
+  await veTexto('Assistente de IA');
+
+  api.respostaChat = null;
+  digitar('Digite sua dúvida', 'Como organizar a caixa de remédios?');
+  clicar('Enviar');
+  await veTexto(/O assistente está indisponível no momento/);
+
+  api.offline = true;
+  digitar('Digite sua dúvida', 'Como organizar a caixa de remédios?');
+  clicar('Enviar');
+  await veTexto(/Sem internet agora/);
+
+  // Sem internet, as perguntas sobre os dados continuam funcionando
+  digitar('Digite sua dúvida', 'Quais remédios tenho cadastrados?');
+  clicar('Enviar');
+  await veTexto('Você ainda não tem remédios cadastrados.');
 });
 
 test('foto do remédio aparece nos detalhes e foto do perfil é salva', async () => {
