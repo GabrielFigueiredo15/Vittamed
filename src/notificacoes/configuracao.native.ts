@@ -6,6 +6,7 @@ import {
   CANAL_DOSES_VISUAL,
   CANAL_DOSES_SOM,
   CANAL_DOSES_VIBRACAO,
+  CANAL_FAMILIA,
   CATEGORIA_DOSE,
   ACAO_TOMEI,
   ACAO_ADIAR,
@@ -65,6 +66,14 @@ async function criarCanais(): Promise<void> {
     importance: N.AndroidImportance.HIGH,
     sound: null,
     vibrationPattern: [0, 400, 200, 400],
+    lockscreenVisibility: publico,
+  });
+  // Push do backend para a família quando uma dose não é tomada (RF09)
+  await N.setNotificationChannelAsync(CANAL_FAMILIA, {
+    name: 'Avisos para a família',
+    importance: N.AndroidImportance.HIGH,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
     lockscreenVisibility: publico,
   });
 }

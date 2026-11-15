@@ -25,9 +25,16 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "O Vittamed usa suas fotos só para a foto do perfil e da embalagem dos remédios."
+          "photosPermission": "O Vittamed usa suas fotos só para a foto do perfil e da embalagem dos remédios.",
+          "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "00f926e3-8fa7-4b8b-aaca-7803e3f19269"
+      }
+    },
+    "owner": "gabrielcatter"
   }
 }

@@ -70,7 +70,7 @@ function Tela({ rota }: { rota: Rota }) {
   switch (rota.nome) {
     case 'login': return <TelaLogin />;
     case 'criarConta': return <TelaCriarConta />;
-    case 'completarPerfil': return <TelaCompletarPerfil email={rota.email} senha={rota.senha} editar={rota.editar} />;
+    case 'completarPerfil': return <TelaCompletarPerfil editar={rota.editar} />;
     case 'recuperarSenha': return <TelaRecuperarSenha />;
     case 'semConexao': return <TelaSemConexao />;
     case 'inicio': return <TelaInicio />;
@@ -148,6 +148,12 @@ function Raiz() {
       if (!dados) return;
       if (dados.tipo === 'orientacao') {
         raiz({ nome: 'orientacoes', medId: dados.medicamentoId });
+        return;
+      }
+      // Aviso de dose não tomada vindo de outro aparelho da conta (RF09).
+      // Ao voltar para a frente, o app baixa o registro da API.
+      if (dados.tipo === 'aviso_familia') {
+        raiz({ nome: 'avisos' });
         return;
       }
       const { medicamentoId, horarioPrevisto } = dados;
