@@ -15,7 +15,7 @@ import {
   mascaraHora,
   minutosDepois,
 } from '../datas';
-import { orientacaoVencida, resumoDias, resumoHorarios, textoStatus } from '../doses';
+import { emHistorico, orientacaoVencida, resumoDias, resumoHorarios, textoStatus } from '../doses';
 import { novoId, useApp, type OrientacaoApp } from '../estado';
 import { escolherFoto } from '../foto';
 import {
@@ -51,12 +51,61 @@ export function TelaRemedios() {
   const lista = estado.medicamentos.filter((m) =>
     m.nome.toLowerCase().includes(busca.trim().toLowerCase())
   );
+  // RF10: tratamentos encerrados ficam separados, no histórico
+  const emUso = lista.filter((m) => !emHistorico(m));
+  const historico = lista.filter((m) => emHistorico(m));
+  const totalEmUso = estado.medicamentos.filter((m) => !emHistorico(m)).length;
+
+  const cartao = (m: Medicamento, encerrado: boolean) => (
+    <Cartao key={m.id}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: c.suaveFundo, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+          <T>{encerrado ? '📁' : '💊'}</T>
+        </View>
+        <View style={{ flex: 1 }}>
+          <T negrito>{nomeCompleto(m)}</T>
+          {!!m.forma_uso && <T v="pequeno" cor="suave">{m.forma_uso}</T>}
+        </View>
+      </View>
+      {encerrado ? (
+        <>
+          <T v="pequeno">
+            📅 {chaveParaBR(m.periodo_inicio)}{m.periodo_fim ? ` a ${chaveParaBR(m.periodo_fim)}` : ''}
+          </T>
+          <T v="pequeno" cor="suave" style={{ marginBottom: 10 }}>Tratamento encerrado · lembretes desligados</T>
+        </>
+      ) : (
+        <>
+          <T v="pequeno">🕒 {resumoHorarios(m)} · {resumoDias(m)}</T>
+          <T v="pequeno" cor="suave" style={{ marginBottom: 10 }}>
+            {estado.prefs.lembretes ? '🔔 Lembrete ativado' : '🔕 Lembretes desligados'}
+          </T>
+        </>
+      )}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Botao titulo="Detalhes" v="contorno" pequeno style={{ flex: 1, marginBottom: 0 }} onPress={() => nav.ir({ nome: 'detalhes', id: m.id })} />
+        <Botao titulo="Editar" v="suave" pequeno style={{ flex: 1, marginBottom: 0 }} onPress={() => nav.ir({ nome: 'dadosRemedio', id: m.id })} />
+        <Botao titulo="Excluir" v="contorno" pequeno style={{ flex: 1, marginBottom: 0 }} onPress={() => setExcluindo(m.id)} />
+      </View>
+      {excluindo === m.id && (
+        <View style={{ marginTop: 10 }}>
+          <ConfirmarExclusao
+            titulo="Ao excluir • confirmação"
+            texto={`Excluir ${m.nome}? Remover o medicamento encerra seus lembretes. O histórico das doses é mantido.`}
+            rotuloConfirmar="Excluir medicamento"
+            onConfirmar={() => { excluirMedicamento(m.id); setExcluindo(null); }}
+            onCancelar={() => setExcluindo(null)}
+          />
+        </View>
+      )}
+    </Cartao>
+  );
 
   return (
     <Pagina>
       <T v="titulo">Meus remédios</T>
       <T v="pequeno" cor="suave" style={{ marginBottom: 12 }}>
-        {estado.medicamentos.length} {estado.medicamentos.length === 1 ? 'remédio cadastrado' : 'remédios cadastrados'}
+        {totalEmUso} {totalEmUso === 1 ? 'remédio em uso' : 'remédios em uso'}
       </T>
 
       <Botao titulo="+ Adicionar remédio" v="suave" onPress={() => nav.ir({ nome: 'dadosRemedio' })} />
@@ -76,39 +125,17 @@ export function TelaRemedios() {
         <T v="pequeno" cor="suave">Nenhum remédio encontrado para "{busca}".</T>
       )}
 
-      {lista.map((m) => (
-        <Cartao key={m.id}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: c.suaveFundo, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-              <T>💊</T>
-            </View>
-            <View style={{ flex: 1 }}>
-              <T negrito>{nomeCompleto(m)}</T>
-              {!!m.forma_uso && <T v="pequeno" cor="suave">{m.forma_uso}</T>}
-            </View>
-          </View>
-          <T v="pequeno">🕒 {resumoHorarios(m)} · {resumoDias(m)}</T>
+      {emUso.map((m) => cartao(m, false))}
+
+      {historico.length > 0 && (
+        <>
+          <T v="subtitulo" style={{ marginTop: 8 }}>Histórico</T>
           <T v="pequeno" cor="suave" style={{ marginBottom: 10 }}>
-            {estado.prefs.lembretes ? '🔔 Lembrete ativado' : '🔕 Lembretes desligados'}
+            Tratamentos encerrados. Para voltar a usar, toque em Editar e mude a data de término.
           </T>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Botao titulo="Detalhes" v="contorno" pequeno style={{ flex: 1, marginBottom: 0 }} onPress={() => nav.ir({ nome: 'detalhes', id: m.id })} />
-            <Botao titulo="Editar" v="suave" pequeno style={{ flex: 1, marginBottom: 0 }} onPress={() => nav.ir({ nome: 'dadosRemedio', id: m.id })} />
-            <Botao titulo="Excluir" v="contorno" pequeno style={{ flex: 1, marginBottom: 0 }} onPress={() => setExcluindo(m.id)} />
-          </View>
-          {excluindo === m.id && (
-            <View style={{ marginTop: 10 }}>
-              <ConfirmarExclusao
-                titulo="Ao excluir • confirmação"
-                texto={`Excluir ${m.nome}? Remover o medicamento encerra seus lembretes. O histórico das doses é mantido.`}
-                rotuloConfirmar="Excluir medicamento"
-                onConfirmar={() => { excluirMedicamento(m.id); setExcluindo(null); }}
-                onCancelar={() => setExcluindo(null)}
-              />
-            </View>
-          )}
-        </Cartao>
-      ))}
+          {historico.map((m) => cartao(m, true))}
+        </>
+      )}
     </Pagina>
   );
 }
@@ -227,6 +254,9 @@ export function TelaProgramar({ medId, rascunho }: { medId?: string; rascunho: R
       agendamento = { tipo: 'fixo', horarios: unicos };
     }
 
+    // Término mudado para hoje ou depois: o remédio sai do histórico
+    const ativo = !chaveFim || chaveFim >= chaveData(new Date());
+
     salvarMedicamento({
       id: existente?.id ?? novoId('m'),
       nome: rascunho.nome,
@@ -237,12 +267,14 @@ export function TelaProgramar({ medId, rascunho }: { medId?: string; rascunho: R
       agendamento,
       periodo_inicio: chaveInicio,
       periodo_fim: chaveFim,
-      ativo: true,
+      ativo,
       criado_em: existente?.criado_em ?? new Date().toISOString(),
     });
-    avisar('Pronto', estado.prefs.lembretes
-      ? `${rascunho.nome} salvo. Os lembretes foram agendados.`
-      : `${rascunho.nome} salvo. Os lembretes estão desligados em Perfil.`);
+    avisar('Pronto', !ativo
+      ? `${rascunho.nome} salvo no histórico: o período de uso já terminou.`
+      : estado.prefs.lembretes
+        ? `${rascunho.nome} salvo. Os lembretes foram agendados.`
+        : `${rascunho.nome} salvo. Os lembretes estão desligados em Perfil.`);
     nav.raiz({ nome: 'remedios' });
   };
 
@@ -354,6 +386,9 @@ export function TelaDetalhes({ id }: { id: string }) {
           Início: {chaveParaBR(m.periodo_inicio)} • {m.periodo_fim ? `Término: ${chaveParaBR(m.periodo_fim)}` : 'Uso contínuo'}
         </T>
         {!!m.observacoes && <T v="pequeno" style={{ marginTop: 6 }}>Observações: {m.observacoes}</T>}
+        {emHistorico(m) && (
+          <T v="pequeno" cor="primaria" negrito style={{ marginTop: 6 }}>No histórico · Tratamento encerrado, lembretes desligados</T>
+        )}
       </Cartao>
       <FotoEmbalagem uri={m.foto_url} />
       <Botao titulo="Editar" onPress={() => nav.ir({ nome: 'dadosRemedio', id: m.id })} />

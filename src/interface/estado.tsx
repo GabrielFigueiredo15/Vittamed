@@ -35,7 +35,7 @@ import { baixarDados, enviarFila, mesclar, reconciliar } from '../api/sincroniza
 import { desregistrarAparelho, registrarAparelho } from '../api/aparelho';
 import { ouvirTrocaToken } from '../notificacoes/push';
 import type { Medicamento, Orientacao, StatusDose } from '../notificacoes/tipos';
-import { chaveDose, type Registro } from './doses';
+import { chaveDose, tratamentosParaEncerrar, type Registro } from './doses';
 
 export type TamanhoTexto = 'normal' | 'grande' | 'muito_grande';
 export type TemaApp = 'claro' | 'escuro';
@@ -339,12 +339,38 @@ export function ProvedorApp({ children }: { children: React.ReactNode }) {
     if (hidratado && estado.sessao) void sincronizarApi(false);
   }, [hidratado, estado.sessao, estado.medicamentos, estado.registros, estado.orientacoes, sincronizarApi]);
 
+  // RF10: período de uso acabou -> encerra os lembretes e move para o histórico
+  // (ativo=false, enviado à API para os outros aparelhos da conta)
+  const encerrarTratamentos = useCallback(() => {
+    const e = estadoRef.current;
+    if (!e.sessao) return;
+    const encerrar = tratamentosParaEncerrar(e.medicamentos);
+    if (encerrar.length === 0) return;
+    const ids = new Set(encerrar.map((m) => m.id));
+    const encerrados = (meds: Medicamento[]) =>
+      meds.map((m) => (ids.has(m.id) ? { ...m, ativo: false } : m));
+    // Atualiza a referência já: um envio da fila em andamento lê o remédio dela
+    // e mandaria ativo=true se esperasse o próximo render
+    estadoRef.current = { ...e, medicamentos: encerrados(e.medicamentos) };
+    setEstado((atual) => ({ ...atual, medicamentos: encerrados(atual.medicamentos) }));
+    for (const id of ids) {
+      void cancelarLembretesMedicamento(id);
+      enfileirar({ tipo: 'med_salvar', medId: id });
+    }
+  }, []);
+
+  // Ao abrir, ao entrar e quando a lista muda (ex.: baixada da API)
+  useEffect(() => {
+    if (hidratado && estado.sessao) encerrarTratamentos();
+  }, [hidratado, estado.sessao, estado.medicamentos, encerrarTratamentos]);
+
   // Microtarefa 10: reagenda ao abrir o app e ao voltar do segundo plano
   // (e aproveita para trocar dados com a API)
   useEffect(() => {
     if (!hidratado) return;
     const assinatura = AppState.addEventListener('change', (proximo) => {
       if (proximo === 'active') {
+        encerrarTratamentos(); // o dia pode ter virado com o app em segundo plano
         sincronizar();
         void sincronizarApi(true);
         // A permissão pode ter sido liberada agora (ex.: nas configurações)
@@ -352,7 +378,7 @@ export function ProvedorApp({ children }: { children: React.ReactNode }) {
       }
     });
     return () => assinatura.remove();
-  }, [hidratado, sincronizar, sincronizarApi]);
+  }, [hidratado, sincronizar, sincronizarApi, encerrarTratamentos]);
 
   // Refresh token recusado pela API: volta ao login (os dados locais ficam)
   useEffect(

@@ -25,10 +25,13 @@ export interface DoseDia {
 export const chaveDose = (medicamentoId: string, horario: Date | string): string =>
   `${medicamentoId}|${new Date(horario).getTime()}`;
 
-// Horários do medicamento em um dia (do passado ou do futuro)
+// Horários do medicamento em um dia (do passado ou do futuro).
+// Remédio no histórico (ativo=false) com data de término continua mostrando
+// as doses do período em que foi usado; o período já limita os dias.
 export function horariosDoDia(med: Medicamento, dia: Date): Date[] {
   const antes = new Date(inicioDoDia(dia).getTime() - 1);
-  return proximosHorarios(med, antes, 1, 60).filter((h) => mesmoDia(h, dia));
+  const base = med.ativo === false && med.periodo_fim ? { ...med, ativo: true } : med;
+  return proximosHorarios(base, antes, 1, 60).filter((h) => mesmoDia(h, dia));
 }
 
 // Todas as doses do dia, em ordem de horário, já com o status registrado
@@ -90,6 +93,16 @@ export function orientacaoVencida(o: Orientacao, hoje: Date = new Date()): boole
 
 export function medicamentoFinalizado(med: Medicamento, hoje: Date = new Date()): boolean {
   return !!med.periodo_fim && med.periodo_fim < chaveData(hoje);
+}
+
+// RF10: remédio no histórico (tratamento encerrado)
+export function emHistorico(med: Medicamento, hoje: Date = new Date()): boolean {
+  return med.ativo === false || medicamentoFinalizado(med, hoje);
+}
+
+// Remédios cujo período acabou mas ainda estão marcados como ativos
+export function tratamentosParaEncerrar(meds: Medicamento[], hoje: Date = new Date()): Medicamento[] {
+  return meds.filter((m) => m.ativo !== false && medicamentoFinalizado(m, hoje));
 }
 
 // "08:00 e 20:00" / "a cada 8 horas" / "Seg, Qua"

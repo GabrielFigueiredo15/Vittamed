@@ -10,7 +10,7 @@ import {
   mascaraHora,
   semanaDe,
 } from './datas';
-import { dosesDoDia, letrasDoDia, proximaDose, type Registro } from './doses';
+import { dosesDoDia, emHistorico, letrasDoDia, proximaDose, tratamentosParaEncerrar, type Registro } from './doses';
 
 const AGORA = new Date(2026, 9, 12, 10, 0); // 12/10/2026 (segunda)
 const med = (id: string, nome: string, horarios: string[], extra: Partial<Medicamento> = {}): Medicamento => ({
@@ -130,4 +130,23 @@ test('remédio citado e contexto para a IA', () => {
   expect(ctx).toContain('- Losartana 50 mg; horários: 12:00; dias: Todos os dias');
   expect(ctx).toContain('observações: Depois do café; tratamento encerrado');
   expect(contextoRemedios([], AGORA)).toMatch(/ainda não cadastrou/);
+});
+
+test('RF10: tratamento com término passado vai para o histórico', () => {
+  const meds = [
+    med('a', 'Losartana', ['12:00']),                                       // uso contínuo
+    med('b', 'Amoxicilina', ['08:00'], { periodo_fim: '2026-10-12' }),      // termina hoje
+    med('c', 'Dipirona', ['08:00'], { periodo_fim: '2026-10-11' }),         // terminou ontem
+    med('d', 'Vitamina D', ['08:00'], { periodo_fim: '2026-10-05', ativo: false }), // já no histórico
+  ];
+  expect(tratamentosParaEncerrar(meds, AGORA).map((m) => m.id)).toEqual(['c']);
+  expect(meds.filter((m) => emHistorico(m, AGORA)).map((m) => m.id)).toEqual(['c', 'd']);
+});
+
+test('remédio no histórico continua aparecendo nos dias em que foi usado', () => {
+  const encerrado = med('d', 'Vitamina D', ['08:00'], { periodo_fim: '2026-10-05', ativo: false });
+  expect(dosesDoDia([encerrado], [], new Date(2026, 9, 5))).toHaveLength(1);
+  expect(dosesDoDia([encerrado], [], new Date(2026, 9, 6))).toHaveLength(0);
+  expect(dosesDoDia([encerrado], [], AGORA)).toHaveLength(0);
+  expect(proximaDose([encerrado], [], AGORA)).toBeNull();
 });
