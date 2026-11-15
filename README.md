@@ -63,14 +63,15 @@ access for health professionals, medical appointments or other health signals.
 ### Requirements
 
 - Node.js 20+ and npm
-- A physical Android device or an Android emulator
+- A phone with the Expo Go app (Android or iPhone), or Android Studio with an emulator for `npm run android`
 - [`uv`](https://docs.astral.sh/uv/) and Python 3.13+ (only to run the backend locally)
 
 ### Run the mobile app
 
 ```bash
 npm install
-npm run android      # build and run on a connected device / emulator
+npx expo start --go  # run with Expo Go on a physical Android or iPhone (no Android Studio needed)
+npm run android      # build and run on a connected device / emulator (requires Android Studio)
 ```
 
 Other scripts:
@@ -105,8 +106,8 @@ files that are listed in `.gitignore`.
 
 ## API overview
 
-All routes except `/auth/*` require `Authorization: Bearer <id_token>`.
-Data is isolated per user.
+The routes `/`, `/auth/*`, `/busca` and `/bula/{slug}` are public. All the other
+routes require `Authorization: Bearer <id_token>`. Data is isolated per user.
 
 | Area | Routes |
 |---|---|
@@ -115,6 +116,7 @@ Data is isolated per user.
 | Medications | `/medicamentos` (create, list, get, update, delete) |
 | Doses | `/doses` (create, list, get, update, delete) |
 | Instructions | `/orientacoes` (create, list, get, update, delete) |
+| Medicine lookup (public) | `GET /busca`, `GET /bula/{slug}` |
 | AI assistant | `POST /chat` |
 
 The full contract is in [`Gate_Mobile_Vitamed/CONTRATO.md`](Gate_Mobile_Vitamed/CONTRATO.md).
