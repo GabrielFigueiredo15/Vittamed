@@ -765,3 +765,68 @@ test('tocar no aviso de dose não tomada abre os avisos do perfil', async () => 
   act(() => dispararToque({ tipo: 'aviso_familia' }));
   await veTexto('Avisos do perfil compartilhado');
 });
+
+// ---------- RF10: fim do tratamento vai para o histórico ----------
+
+test('ao fim do período o remédio vai para o histórico, sem lembretes, e a API é avisada', async () => {
+  await criarContaEEntrar();
+  aba('Remédios');
+  await veTexto('Meus remédios');
+  clicar('+ Adicionar remédio');
+  await veTexto('Dados do remédio');
+  digitar('Nome', 'Amoxicilina');
+  clicar('Continuar para programação');
+  await veTexto('Programar remédio');
+  digitar('Horário 1', '20:00');
+  fireEvent.click(screen.getByRole('radio', { name: /Com término/ }));
+  digitar('Data de término', '12/10/2026'); // termina hoje
+  clicar('Salvar remédio');
+  await veTexto('Meus remédios');
+  await waitFor(() => expect(idsAgendados('dose_').length).toBe(1));
+  await waitFor(() => expect(medsNaApi()[0]?.ativo).toBe(true));
+
+  // Dia seguinte: o app abre de novo
+  cleanup();
+  jest.setSystemTime(new Date(2026, 9, 13, 10, 0));
+  render(<App />);
+  await veTexto(/Hoje, 13 de outubro/);
+
+  await waitFor(() => expect(estadoSalvo().medicamentos[0].ativo).toBe(false));
+  await waitFor(() => expect(medsNaApi()[0]?.ativo).toBe(false));
+  expect(idsAgendados('dose_').length).toBe(0);
+
+  aba('Remédios');
+  await veTexto('0 remédios em uso');
+  await veTexto('Histórico');
+  await veTexto('Tratamento encerrado · lembretes desligados');
+
+  // Mudar a data de término tira do histórico e volta a lembrar
+  clicar('Editar');
+  await veTexto('Dados do remédio');
+  clicar('Continuar para programação');
+  await veTexto('Programar remédio');
+  digitar('Data de término', '20/10/2026');
+  clicar('Salvar alterações');
+  await veTexto('1 remédio em uso');
+  await waitFor(() => expect(medsNaApi()[0]?.ativo).toBe(true));
+  await waitFor(() => expect(idsAgendados('dose_').length).toBeGreaterThan(0));
+});
+
+test('cadastrar com término já passado salva direto no histórico', async () => {
+  await criarContaEEntrar();
+  aba('Remédios');
+  await veTexto('Meus remédios');
+  clicar('+ Adicionar remédio');
+  await veTexto('Dados do remédio');
+  digitar('Nome', 'Dipirona');
+  clicar('Continuar para programação');
+  await veTexto('Programar remédio');
+  digitar('Data de início', '01/10/2026');
+  fireEvent.click(screen.getByRole('radio', { name: /Com término/ }));
+  digitar('Data de término', '05/10/2026');
+  clicar('Salvar remédio');
+  await veTexto('Meus remédios');
+  expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('salvo no histórico'));
+  await veTexto('Tratamento encerrado · lembretes desligados');
+  expect(idsAgendados('dose_').length).toBe(0);
+});

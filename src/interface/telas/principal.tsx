@@ -22,8 +22,8 @@ import {
 import {
   dosesDoDia,
   letraStatus,
+  emHistorico,
   letrasDoDia,
-  medicamentoFinalizado,
   orientacaoVencida,
   textoStatus,
   type DoseDia,
@@ -187,7 +187,7 @@ export function TelaCalendario({ dia }: { dia?: string }) {
 
   const grade = gradeDoMes(mes.getFullYear(), mes.getMonth());
   const doses = dosesDoDia(estado.medicamentos, estado.registros, selecionado);
-  const finalizados = estado.medicamentos.filter((m) => medicamentoFinalizado(m));
+  const finalizados = estado.medicamentos.filter((m) => emHistorico(m));
 
   return (
     <Pagina>
