@@ -4,7 +4,7 @@ Backend do app de organização de medicamentos para pessoas idosas.
 Expõe **autenticação**, **CRUD** (Firestore), **consulta de remédios** e
 **assistente de IA**. Este documento é o contrato para o time de front.
 
-- **Versão:** `0.4.0`
+- **Versão:** `0.5.0`
 - **Base URL:** `https://gate-mobile-vitamed.fastapicloud.dev`
 - **Docs interativa (Swagger):** `GET /docs`
 - **OpenAPI JSON:** `GET /openapi.json`
@@ -173,6 +173,32 @@ Erros: `404` medicamento inexistente · `413` maior que 5 MB · `415` não é im
 ### `GET /fotos/{token}` (público)
 Devolve a imagem (`image/jpeg`) da `foto_url`. `404` se a foto foi trocada ou o remédio excluído.
 Com o backend em manutenção (`PAUSE=1`), as fotos também não carregam.
+
+### `GET /medicamentos/imagem-sugerida?nome=&dosagem=` (protegido)
+Sugere **fotos reais da caixa** a partir do consultaremedios, para a pessoa não
+precisar fotografar. Pode ser chamada no cadastro, antes de salvar o remédio.
+```json
+// GET /medicamentos/imagem-sugerida?nome=Dipirona&dosagem=500mg
+{
+  "sugestoes": [
+    { "imagem": "https://uploads.consultaremedios.com.br/...png",
+      "produto": "Dipirona Monoidratada Medley 500mg, caixa com 30 comprimidos",
+      "score": 1.0, "mesma_dosagem": true }
+  ],
+  "imagem_generica": "https://cr-net-public-staging.s3.amazonaws.com/pharmaceutic_form/...png"
+}
+```
+- `sugestoes`: até 3, com as caixas de **mesma dosagem** primeiro. Pode vir **vazia**,
+  porque muitos remédios não têm foto da caixa no consultaremedios.
+- Nunca entram: imagens genéricas, nem **associações** ("Losartana + Hidroclorotiazida")
+  quando o nome digitado não tem "+".
+- `imagem_generica`: desenho da forma farmacêutica (ex.: comprimido), com a marca d'água do
+  consultaremedios. Não é a caixa; serve, se o app quiser, como imagem padrão no lugar do placeholder.
+- **A sugestão nunca é salva sozinha**: mostre a foto e pergunte "É a caixa do seu remédio?".
+  Se a pessoa confirmar, grave com `PATCH /medicamentos/{id}` `{ "foto_url": "<imagem>" }`.
+- `dosagem` é opcional; sem ela, `mesma_dosagem` vem `false` em todas.
+
+Erros: `401` sem token · `422` sem `nome` · `502` falha no consultaremedios.
 
 > `foto_url` continua aceitando uma URL qualquer via `POST`/`PATCH /medicamentos`
 > (compatível com a v0.3.0). O endpoint acima é o caminho recomendado.
@@ -416,6 +442,15 @@ O app **não** acessa o Firebase direto: tudo passa pela API, que usa o Admin SD
 - Aplicar no console: **Firestore Database → Regras**, colar o conteúdo e **Publicar**;
   ou `firebase deploy --only firestore:rules` (usa o `firebase.json` daqui).
 - O projeto **não usa o Firebase Storage** (as fotos ficam no Firestore), então não há regras de Storage a publicar.
+
+---
+
+## 15. Mudanças na v0.5.0 (só coisa nova)
+
+| Novidade | Ação no app |
+|---|---|
+| `GET /medicamentos/imagem-sugerida?nome=&dosagem=` | No cadastro, oferecer a foto sugerida; se a pessoa confirmar, `PATCH foto_url` |
+| `imagem_generica` (desenho da forma farmacêutica) | Opcional: usar no lugar do placeholder "sem imagem" |
 
 ---
 

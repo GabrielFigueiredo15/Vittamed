@@ -19,7 +19,7 @@ app = FastAPI(
         "idosos + consulta de remedios e assistente de IA. Autenticacao via "
         "Firebase ID token (header Authorization: Bearer)."
     ),
-    version="0.4.0",
+    version="0.5.0",
 )
 
 app.include_router(auth.router)

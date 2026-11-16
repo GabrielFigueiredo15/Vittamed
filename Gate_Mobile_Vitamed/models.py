@@ -158,3 +158,15 @@ class OrientacaoOut(OrientacaoBase):
     id: str
     criado_em: datetime | None = None
     atualizado_em: datetime | None = None
+
+
+class SugestaoImagem(BaseModel):
+    imagem: str
+    produto: str | None = None
+    score: float
+    mesma_dosagem: bool
+
+
+class SugestoesImagem(BaseModel):
+    sugestoes: list[SugestaoImagem]
+    imagem_generica: str | None = None

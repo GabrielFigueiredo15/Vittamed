@@ -3,14 +3,16 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from google.api_core.exceptions import GoogleAPIError
 
 import firebase
 import fotos
+import scraper
 import store
+import sugestao
 from deps import uid_atual
-from models import MedicamentoCreate, MedicamentoOut, MedicamentoUpdate
+from models import MedicamentoCreate, MedicamentoOut, MedicamentoUpdate, SugestoesImagem
 
 router = APIRouter(prefix="/medicamentos", tags=["medicamentos"])
 _COL = "medicamentos"
@@ -25,6 +27,22 @@ def criar(dados: MedicamentoCreate, uid: str = Depends(uid_atual)):
 @router.get("", response_model=list[MedicamentoOut])
 def listar(uid: str = Depends(uid_atual)):
     return store.listar(uid, _COL)
+
+
+@router.get(
+    "/imagem-sugerida",
+    response_model=SugestoesImagem,
+    summary="Sugere fotos da embalagem pelo nome e dosagem (consultaremedios)",
+    dependencies=[Depends(uid_atual)],
+)
+async def imagem_sugerida(
+    nome: str = Query(..., min_length=2, description="Nome do remedio, ex: Losartana"),
+    dosagem: str | None = Query(None, description="Ex: 50mg; sobe as caixas com a mesma dosagem"),
+):
+    try:
+        return await sugestao.sugerir(nome, dosagem)
+    except scraper.ConsultaRemediosError as exc:
+        raise HTTPException(502, str(exc))
 
 
 @router.get("/{med_id}", response_model=MedicamentoOut)
