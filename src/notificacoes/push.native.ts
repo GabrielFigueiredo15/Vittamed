@@ -8,6 +8,7 @@
 //  - app.json -> expo.extra.eas.projectId (criado com `eas init`);
 //  - Android: credenciais do FCM no EAS (google-services.json + chave do FCM V1).
 
+import { isRunningInExpoGo } from 'expo';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
@@ -26,6 +27,14 @@ export type ResultadoToken =
   | { ok: true; token: string; plataforma: 'android' | 'ios' }
   | { ok: false; motivo: MotivoSemToken; detalhe?: string };
 
+// Expo Go: o push remoto foi removido no Android (SDK 53+) e chamar
+// addPushTokenListener ou getExpoPushTokenAsync lá dá erro na tela.
+// Usa a mesma checagem do expo-notifications (isRunningInExpoGo); o
+// executionEnvironment "storeClient" também vale para a development build.
+export function estaNoExpoGo(): boolean {
+  return isRunningInExpoGo() || Constants.appOwnership === 'expo';
+}
+
 function idDoProjeto(): string | undefined {
   const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
   return extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? undefined;
@@ -34,7 +43,7 @@ function idDoProjeto(): string | undefined {
 export async function obterTokenPush(): Promise<ResultadoToken> {
   const N = obterNotificacoes();
   if (!N || (Platform.OS !== 'android' && Platform.OS !== 'ios')) return { ok: false, motivo: 'sem_suporte' };
-  if (Constants.appOwnership === 'expo') return { ok: false, motivo: 'expo_go' };
+  if (estaNoExpoGo()) return { ok: false, motivo: 'expo_go' };
   if (!Device.isDevice) return { ok: false, motivo: 'emulador' };
 
   // Não pede permissão aqui: ela é pedida quando a pessoa cadastra um remédio
@@ -55,7 +64,7 @@ export async function obterTokenPush(): Promise<ResultadoToken> {
 // O token pode mudar (reinstalação, restauração de backup): avisa para registrar de novo
 export function ouvirTrocaToken(aoTrocar: () => void): () => void {
   const N = obterNotificacoes();
-  if (!N) return () => {};
+  if (!N || estaNoExpoGo()) return () => {};
   const assinatura = N.addPushTokenListener(() => aoTrocar());
   return () => assinatura.remove();
 }
