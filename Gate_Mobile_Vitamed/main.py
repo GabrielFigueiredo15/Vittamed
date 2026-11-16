@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 import ai
 import scraper
 from deps import uid_atual
-from routers import auth, doses, medicamentos, orientacoes, perfil
+from routers import aparelhos, auth, doses, fotos_publicas, medicamentos, orientacoes, perfil
 
 app = FastAPI(
     title="Gate Mobile Vitamed",
@@ -19,7 +19,7 @@ app = FastAPI(
         "idosos + consulta de remedios e assistente de IA. Autenticacao via "
         "Firebase ID token (header Authorization: Bearer)."
     ),
-    version="0.3.0",
+    version="0.4.0",
 )
 
 app.include_router(auth.router)
@@ -27,6 +27,8 @@ app.include_router(perfil.router)
 app.include_router(medicamentos.router)
 app.include_router(doses.router)
 app.include_router(orientacoes.router)
+app.include_router(aparelhos.router)
+app.include_router(fotos_publicas.router)
 
 
 @app.middleware("http")

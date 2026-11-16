@@ -10,6 +10,7 @@
 
 import type { Medicamento, Orientacao, StatusDose } from '../notificacoes/tipos';
 import { chaveDose, type Registro } from '../interface/doses';
+import { tokenPushDoAparelho } from './aparelho';
 import { ehErroApi, requisitar } from './cliente';
 import {
   concluirOperacao,
@@ -148,11 +149,13 @@ async function salvarDose(chave: string, obter: () => DadosLocais): Promise<void
     horario_registrado: registro.horario_registrado ?? null,
     novo_horario: registro.status === 'adiada' ? registro.novo_horario ?? null : null,
   };
+  const tokenPush = await tokenPushDoAparelho();
+  const cabecalhos = tokenPush ? { 'X-Token-Push': tokenPush } : undefined;
 
   const doseApi = estadoSync().idsDose[chave];
   if (doseApi) {
     try {
-      await requisitar('PATCH', `/doses/${encodeURIComponent(doseApi)}`, { corpo: desfecho });
+      await requisitar('PATCH', `/doses/${encodeURIComponent(doseApi)}`, { corpo: desfecho, cabecalhos });
       return;
     } catch (erro) {
       if (!ehNaoEncontrado(erro)) throw erro;
@@ -167,10 +170,11 @@ async function salvarDose(chave: string, obter: () => DadosLocais): Promise<void
       status: desfecho.status,
       novo_horario: desfecho.novo_horario,
     },
+    cabecalhos,
   });
   alterarSync((s) => ({ ...s, idsDose: { ...s.idsDose, [chave]: criada.id } }));
   if (desfecho.horario_registrado) {
-    await requisitar('PATCH', `/doses/${encodeURIComponent(criada.id)}`, { corpo: desfecho });
+    await requisitar('PATCH', `/doses/${encodeURIComponent(criada.id)}`, { corpo: desfecho, cabecalhos });
   }
 }
 

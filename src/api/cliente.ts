@@ -89,10 +89,11 @@ function mensagemDoCorpo(corpo: unknown): string | null {
 interface Opcoes {
   corpo?: unknown;
   autenticado?: boolean;            // padrão: true
+  cabecalhos?: Record<string, string>;
 }
 
 async function chamar(metodo: string, caminho: string, opcoes: Opcoes, token?: string): Promise<Response> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: 'application/json', ...opcoes.cabecalhos };
   if (opcoes.corpo !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
 

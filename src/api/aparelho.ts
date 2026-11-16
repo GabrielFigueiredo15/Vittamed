@@ -86,6 +86,14 @@ export function registrarAparelho(): Promise<ResultadoRegistro> {
   return emAndamento;
 }
 
+// Token deste aparelho, se já registrado na conta logada. Vai no header
+// X-Token-Push do /doses para este aparelho não receber o próprio aviso (RF09).
+export async function tokenPushDoAparelho(): Promise<string | null> {
+  const registrado = await lerRegistrado();
+  const sessao = sessaoAtual();
+  return registrado && sessao && registrado.uid === sessao.uid ? registrado.token : null;
+}
+
 // Ao sair da conta: este aparelho para de receber os avisos dela.
 // Precisa rodar ANTES de descartar os tokens da sessão.
 export async function desregistrarAparelho(): Promise<void> {

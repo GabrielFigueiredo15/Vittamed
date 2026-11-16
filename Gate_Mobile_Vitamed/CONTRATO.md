@@ -4,7 +4,7 @@ Backend do app de organização de medicamentos para pessoas idosas.
 Expõe **autenticação**, **CRUD** (Firestore), **consulta de remédios** e
 **assistente de IA**. Este documento é o contrato para o time de front.
 
-- **Versão:** `0.3.0`
+- **Versão:** `0.4.0`
 - **Base URL:** `https://gate-mobile-vitamed.fastapicloud.dev`
 - **Docs interativa (Swagger):** `GET /docs`
 - **OpenAPI JSON:** `GET /openapi.json`
@@ -143,10 +143,39 @@ Validação na escrita (POST/PATCH), com `422` se violar:
 - `GET /medicamentos` → lista
 - `GET /medicamentos/{med_id}`
 - `PATCH /medicamentos/{med_id}` → atualização parcial
-- `DELETE /medicamentos/{med_id}` → `204`. **Apaga junto** as doses e orientações desse medicamento.
+- `DELETE /medicamentos/{med_id}` → `204`. **Apaga junto** as doses, as orientações e a foto desse medicamento.
+- `POST /medicamentos/{med_id}/foto` → `200` com o `Medicamento` já com a `foto_url` nova (RF05).
 
-> Upload da foto em si (arquivo) é responsabilidade do app (Firebase Storage ou
-> outro). Aqui guardamos apenas a `foto_url`.
+### `POST /medicamentos/{med_id}/foto`
+Envia a foto da embalagem. O backend reduz a foto (JPEG, até 1280 px), guarda no
+**Firestore** e preenche `foto_url`, então todos os aparelhos da conta veem a mesma foto.
+
+- Corpo: `multipart/form-data` com o arquivo no campo **`foto`**.
+- Formatos: JPEG, PNG ou WEBP, **até 5 MB** no envio (o picker do app já gera JPEG com `quality: 0.3`).
+- Enviar de novo **substitui** a foto anterior (a antiga é apagada e o link dela para de funcionar).
+- A `foto_url` é um link da própria API: `https://gate-mobile-vitamed.fastapicloud.dev/fotos/<token>`.
+  Abre **sem login** (o token longo e aleatório é a "senha" do link) e pode ir direto num
+  `<Image source={{ uri }}>`. Cada envio gera um link novo, então não há cache velho.
+
+```ts
+// React Native / Expo
+const form = new FormData();
+form.append('foto', { uri: foto.uri, name: 'foto.jpg', type: 'image/jpeg' } as any);
+await fetch(`${BASE}/medicamentos/${id}/foto`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${idToken}` },   // NÃO defina Content-Type: o fetch põe o boundary
+  body: form,
+});
+```
+Erros: `404` medicamento inexistente · `413` maior que 5 MB · `415` não é imagem suportada ·
+`503` Firebase não configurado no servidor.
+
+### `GET /fotos/{token}` (público)
+Devolve a imagem (`image/jpeg`) da `foto_url`. `404` se a foto foi trocada ou o remédio excluído.
+Com o backend em manutenção (`PAUSE=1`), as fotos também não carregam.
+
+> `foto_url` continua aceitando uma URL qualquer via `POST`/`PATCH /medicamentos`
+> (compatível com a v0.3.0). O endpoint acima é o caminho recomendado.
 
 ---
 
@@ -176,6 +205,14 @@ ao receber o lembrete, o usuário registra o desfecho.
 
 Regra (POST e PATCH): `status=adiada` **exige** `novo_horario`, senão `422`.
 
+**Aviso à família (RF09):** quando uma dose **passa a ser** `nao_tomada` (no `POST`
+já com esse status, ou num `PATCH` vindo de outro status), o backend manda um push
+pelo Expo para os aparelhos da conta registrados em `/aparelhos` (seção 7).
+- Repetir `nao_tomada` na mesma dose (ex.: o `PATCH` logo após o `POST`) **não** reenvia.
+- Header opcional **`X-Token-Push: <token_push deste aparelho>`** no `POST`/`PATCH`:
+  esse aparelho não recebe o próprio aviso. Sem o header, todos os aparelhos da conta recebem.
+- O envio é em segundo plano: a resposta do `/doses` não muda e não espera o push.
+
 ---
 
 ## 6. Orientações de uso (protegido)
@@ -201,7 +238,52 @@ Associadas a um medicamento (RF12/13/14).
 
 ---
 
-## 7. Consulta de remédios (público)
+## 7. Aparelhos e aviso à família (protegido)
+
+Cada celular registra o **token de push do Expo** (`getExpoPushTokenAsync`) na conta
+logada. É para esses aparelhos que vai o aviso de dose não tomada (RF09).
+
+### `PUT /aparelhos`
+Registra este aparelho na conta do Bearer. Se o token já estava em **outra** conta
+(celular trocou de conta), ele é **movido** para esta. Pode ser chamado sempre que
+o app abrir ou o token mudar.
+```json
+// request
+{ "token_push": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]", "plataforma": "android" }
+// response 200
+{ "token_push": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]", "plataforma": "android" }
+```
+- `token_push`: formato `ExponentPushToken[...]` ou `ExpoPushToken[...]` (senão `422`).
+- `plataforma`: `"android"` ou `"ios"`.
+
+### `DELETE /aparelhos/{token_push}`
+Chamado no **logout**, antes de descartar os tokens da sessão. Use `encodeURIComponent(token)`.
+`204` removido · `404` token não existe ou é de outra conta.
+
+### O push enviado
+```json
+{
+  "title": "Dose não tomada",
+  "body": "Maria não tomou Losartana 50mg das 08:00.",
+  "channelId": "familia",
+  "sound": "default",
+  "priority": "high",
+  "data": {
+    "tipo": "aviso_familia",
+    "medicamentoId": "abc123",
+    "horarioPrevisto": "2026-11-16T11:00:00Z",
+    "doseId": "def456"
+  }
+}
+```
+- O nome vem do primeiro nome do `PUT /perfil`; sem perfil: `"A dose de Losartana 50mg das 08:00 não foi tomada."`
+- A hora do texto é no horário de Brasília; `horarioPrevisto` continua em UTC.
+- Tokens que o Expo recusar como `DeviceNotRegistered` (app desinstalado) são apagados sozinhos.
+- No Android o push só chega se o projeto Expo/EAS tiver as credenciais do FCM configuradas (parte do app).
+
+---
+
+## 8. Consulta de remédios (público)
 
 Fonte: consultaremedios.com.br.
 
@@ -242,7 +324,7 @@ Erros: `404` bula/slug inexistente · `502` falha no consultaremedios.
 
 ---
 
-## 8. Assistente de IA (protegido)
+## 9. Assistente de IA (protegido)
 
 ### `POST /chat`
 **Exige `Authorization: Bearer <id_token>`** (sem token → `401`).
@@ -272,7 +354,7 @@ Erros: `401` sem token · `422` sem `mensagem`/`mensagens` · `502` falha no pro
 
 ---
 
-## 9. Modo manutenção
+## 10. Modo manutenção
 Quando a env `PAUSE=1`, **toda** rota responde `503`:
 ```json
 { "pausado": true, "mensagem": "olá, estou pausado no momento!" }
@@ -280,17 +362,19 @@ Quando a env `PAUSE=1`, **toda** rota responde `503`:
 
 ---
 
-## 10. Convenções gerais
-- Protegidas (`/perfil`, `/medicamentos`, `/doses`, `/orientacoes`, `/chat`) exigem `Authorization: Bearer <id_token>`.
+## 11. Convenções gerais
+- Protegidas (`/perfil`, `/medicamentos`, `/doses`, `/orientacoes`, `/aparelhos`, `/chat`) exigem `Authorization: Bearer <id_token>`.
 - `401` sem token/token inválido · `403` conta desativada · `404` recurso inexistente ·
-  `422` corpo inválido · `429` muitas tentativas · `502` falha em serviço externo
-  (Firebase/consultaremedios/IA) · `503` servidor sem configuração ou em manutenção.
+  `413` arquivo grande demais · `415` tipo de arquivo não suportado · `422` corpo inválido ·
+  `429` muitas tentativas · `502` falha em serviço externo (Firebase/consultaremedios/IA) ·
+  `503` servidor sem configuração ou em manutenção.
+- Públicas (sem token): `/auth/*`, `/busca`, `/bula/{slug}`, `/fotos/{token}`.
 - IDs de documentos são gerados pelo servidor (string).
 - Nunca envie o `uid` no corpo — ele vem do token.
 
 ---
 
-## 11. Mudanças na v0.3.0 (impacto no front)
+## 12. Mudanças na v0.3.0 (impacto no front)
 
 | Mudança | Ação no app |
 |---|---|
@@ -310,6 +394,31 @@ Quando a env `PAUSE=1`, **toda** rota responde `503`:
 
 ---
 
+## 13. Mudanças na v0.4.0 (só coisas novas, nada existente mudou)
+
+| Novidade | Ação no app |
+|---|---|
+| `PUT /aparelhos` e `DELETE /aparelhos/{token_push}` | Já batem com `src/api/aparelho.ts` |
+| Push `aviso_familia` (canal `familia`) quando a dose vira `nao_tomada` | Já tratado em `App.tsx` |
+| Header opcional `X-Token-Push` no `POST`/`PATCH /doses` | Enviar para o próprio aparelho não receber o aviso |
+| `POST /medicamentos/{id}/foto` (multipart, campo `foto`) | Enviar a foto e usar a `foto_url` devolvida |
+| `GET /fotos/{token}` (público) serve a imagem da `foto_url` | Usar a `foto_url` direto no `<Image>` |
+| `DELETE /medicamentos/{id}` também apaga a foto | Nada |
+
+---
+
+## 14. Regras de segurança do Firebase (RNF04)
+
+O app **não** acessa o Firebase direto: tudo passa pela API, que usa o Admin SDK
+(ignora as regras). Por isso as regras bloqueiam **todo** acesso de cliente:
+`firestore.rules` nesta pasta (`allow read, write: if false`).
+
+- Aplicar no console: **Firestore Database → Regras**, colar o conteúdo e **Publicar**;
+  ou `firebase deploy --only firestore:rules` (usa o `firebase.json` daqui).
+- O projeto **não usa o Firebase Storage** (as fotos ficam no Firestore), então não há regras de Storage a publicar.
+
+---
+
 ## Anexo A — Rastreabilidade dos requisitos (validação frente ao PDF)
 
 Legenda: ✅ coberto pelo backend · 🟡 backend provê os dados, mas a ação final é do app/infra · ⬜ fora do backend (front/infra).
@@ -320,11 +429,11 @@ Legenda: ✅ coberto pelo backend · 🟡 backend provê os dados, mas a ação 
 | RF02 | Login e encerramento de sessão | ✅ | `POST /auth/login` · logout = descartar token no app |
 | RF03 | Perfil acessado por pessoa/família/cuidadora (mesmas credenciais) | ✅ | Conta única → mesmo `uid`; dados em `users/{uid}` |
 | RF04 | Cadastrar, ver, editar, excluir medicamentos | ✅ | `/medicamentos` (POST/GET/PATCH/DELETE) |
-| RF05 | Campos do medicamento (nome, dosagem, forma, horários/freq., dias, período, obs, foto) | ✅ | `Medicamento` + `Agendamento`; foto como `foto_url` |
+| RF05 | Campos do medicamento (nome, dosagem, forma, horários/freq., dias, período, obs, foto) | ✅ | `Medicamento` + `Agendamento`; foto via `POST /medicamentos/{id}/foto` (guardada no Firestore) |
 | RF06 | Horário fixo / intervalo / dias específicos | ✅ | `Agendamento.tipo` (validado) |
 | RF07 | Emitir lembretes das doses | 🟡 | Doses persistidas; **push/agendamento é do app (Expo Notifications)** |
 | RF08 | Registrar dose tomada/não tomada/adiada + novo horário | ✅ | `PATCH /doses/{id}` |
-| RF09 | Avisar familiares quando dose não tomada | 🟡 | Status fica salvo; **notificação é do app** |
+| RF09 | Avisar familiares quando dose não tomada | ✅ | `/aparelhos` + push Expo automático quando a dose vira `nao_tomada` |
 | RF10 | Fim do período: encerrar lembretes e mover p/ histórico | 🟡 | Campo `ativo` + `periodo_fim`; **transição é do app/rotina** |
 | RF11 | Histórico em lista diária e calendário mensal | 🟡 | `GET /doses` (filtros status/medicamento); **render do calendário é do app** |
 | RF12 | CRUD de orientações de uso | ✅ | `/orientacoes` |
@@ -335,15 +444,15 @@ Legenda: ✅ coberto pelo backend · 🟡 backend provê os dados, mas a ação 
 | RNF01 | React Native Android/iOS | ⬜ | App |
 | RNF02 | Firebase Auth + Firestore | ✅ | Backend usa ambos |
 | RNF03 | Exige internet | ✅ | API online |
-| RNF04 | Dados protegidos por auth + regras | ✅ | Bearer + isolamento por `uid`; **recomenda-se também Security Rules no Firestore** |
+| RNF04 | Dados protegidos por auth + regras | ✅ | Bearer + isolamento por `uid` + `firestore.rules` bloqueando acesso direto (seção 14) |
 | RNF05 | Interface acessível (fontes, contraste, fonte ajustável) | ⬜ | App |
 | RNF06 | Funções principais simples, poucos passos | ⬜ | App (API já é enxuta) |
 | RNF07 | IA informa que não substitui orientação médica | ✅ | Guardrail |
 | RNF08 | Compatibilidade com versões atuais de Android/iOS | ⬜ | App |
 
 ### Pendências que dependem do front/infra (não são do backend)
-1. **Notificações push** (RF07/09/14): feitas no app; o backend guarda os dados e o status.
-2. **Upload de arquivo da foto** (RF05): Firebase Storage no app → salvar a URL em `foto_url`.
+1. **Lembretes locais** (RF07/14): feitos no app. O aviso à família (RF09) sai do backend, mas o app precisa das credenciais FCM no EAS para o push chegar no Android.
+2. **Foto** (RF05): o app envia o arquivo para `POST /medicamentos/{id}/foto`.
 3. **Calendário mensal** (RF11): render no app a partir de `GET /doses`.
 4. **Transição automática p/ histórico** (RF10): app/rotina seta `ativo=false` ao passar de `periodo_fim`.
-5. **Security Rules do Firestore** (RNF04): como o acesso é via backend (Admin SDK), convém bloquear acesso direto de clientes ao Firestore.
+5. **Security Rules** (RNF04): publicar `firestore.rules` no console do Firebase (seção 14).

@@ -1,13 +1,20 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+import logging
+import os
 
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from google.api_core.exceptions import GoogleAPIError
+
+import firebase
+import fotos
 import store
 from deps import uid_atual
 from models import MedicamentoCreate, MedicamentoOut, MedicamentoUpdate
 
 router = APIRouter(prefix="/medicamentos", tags=["medicamentos"])
 _COL = "medicamentos"
+log = logging.getLogger("vittamed.fotos")
 
 
 @router.post("", response_model=MedicamentoOut, status_code=status.HTTP_201_CREATED)
@@ -34,3 +41,38 @@ def atualizar(med_id: str, dados: MedicamentoUpdate, uid: str = Depends(uid_atua
 def remover(med_id: str, uid: str = Depends(uid_atual)):
     store.remover(uid, _COL, med_id)
     store.remover_por_medicamento(uid, med_id)
+    try:
+        fotos.apagar(uid, med_id)
+    except firebase.FirebaseNaoConfigurado:
+        pass
+    except GoogleAPIError:
+        log.exception("falha ao apagar a foto do medicamento %s", med_id)
+
+
+def _base_url(request: Request) -> str:
+    base = (os.getenv("API_BASE_URL") or str(request.base_url)).rstrip("/")
+    local = (request.url.hostname or "") in ("localhost", "127.0.0.1", "testserver")
+    if base.startswith("http://") and not local:
+        base = "https://" + base[len("http://"):]
+    return base
+
+
+@router.post("/{med_id}/foto", response_model=MedicamentoOut, summary="Envia a foto da embalagem (RF05)")
+def enviar_foto(
+    med_id: str,
+    request: Request,
+    foto: UploadFile = File(..., description="JPEG, PNG ou WEBP, ate 5 MB"),
+    uid: str = Depends(uid_atual),
+):
+    store.obter(uid, _COL, med_id)
+    conteudo = foto.file.read(fotos.TAMANHO_MAX + 1)
+    if len(conteudo) > fotos.TAMANHO_MAX:
+        raise HTTPException(413, "foto maior que 5 MB")
+    try:
+        token = fotos.salvar(uid, med_id, conteudo)
+    except fotos.FotoInvalida as exc:
+        raise HTTPException(415, str(exc))
+    except firebase.FirebaseNaoConfigurado as exc:
+        raise HTTPException(503, str(exc))
+    url = f"{_base_url(request)}/fotos/{token}"
+    return store.atualizar(uid, _COL, med_id, MedicamentoUpdate(foto_url=url))
